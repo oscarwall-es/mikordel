@@ -16,6 +16,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import puppeteer from 'puppeteer-core'
 import { createServer } from 'vite'
 import { getDailyWord } from '../src/logic/daily.ts'
+import { pickPracticeWord } from '../src/logic/practice.ts'
 
 const root = new URL('..', import.meta.url).pathname
 const readJson = (p) => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'))
@@ -49,7 +50,8 @@ await server.listen()
 const url = server.resolvedUrls.local[0]
 
 const browser = await puppeteer.launch({ executablePath, headless: true })
-const page = await browser.newPage()
+// `let`: avsnitt 7 byter till en egen sida med låst slump, och hjälpfunktionerna följer med.
+let page = await browser.newPage()
 await page.setViewport({ width: 399, height: 676, deviceScaleFactor: 2 })
 
 const errors = []
@@ -145,6 +147,10 @@ try {
   await type('abc')
   check('Går inte att spela om (inmatning ignoreras)', (await tiles()) === `${expectedRows} ${answer.toUpperCase()}`, await tiles())
   check('Resultatet räknas inte två gånger', (await storage('ordel:stats:v1'))?.daily.played === 1)
+  check(
+    'Vinst i dagens ord byter inte bakgrundsfärg',
+    (await page.evaluate(() => localStorage.getItem('ordel:background:v1'))) === '#1e293b',
+  )
 
   await page.click('button[aria-label=Statistik]')
   await sleep(150)
@@ -218,6 +224,39 @@ try {
   await reload()
   await sleep(TRANSITION_MS)
   check('Färgen finns kvar efter omladdning', (await bodyBg()) === 'rgb(245, 230, 200)', await bodyBg())
+
+  // 7. Vunnen övningsrunda byter bakgrundsfärg. Egen kontext där Math.random är låst till 0,
+  // så att övningsordet går att räkna ut med appens egen pickPracticeWord.
+  const mainPage = page
+  const context = await browser.createBrowserContext()
+  page = await context.newPage()
+  await page.setViewport({ width: 399, height: 676, deviceScaleFactor: 2 })
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.evaluateOnNewDocument(() => {
+    Math.random = () => 0
+    localStorage.setItem('ordel:help-seen:v1', 'true')
+  })
+  await page.goto(url, { waitUntil: 'networkidle0' })
+  const practiceWord = pickPracticeWord(ANSWERS, [answer], () => 0)
+  // Välj Rosa manuellt först, för att se att färgbytet skriver över det manuella valet
+  await page.click('button[aria-label=Bakgrundsfärg]')
+  await sleep(150)
+  await page.click('dialog[open] [role=radio][aria-label=Rosa]')
+  await clickText('Klar')
+  await page.click('[role=tab]:nth-child(2)')
+  await sleep(100)
+  await guess(losingGuesses[0])
+  await sleep(300)
+  check('Gissning utan vinst i öva-läget byter inte färg', (await page.evaluate(() => localStorage.getItem('ordel:background:v1'))) === '#fbcfe8')
+  await guess(practiceWord)
+  await sleep(TRANSITION_MS)
+  const afterWin = await page.evaluate(() => localStorage.getItem('ordel:background:v1'))
+  check('Vunnen övningsrunda → resultat visas', (await openDialog()) === 'Snyggt!')
+  check('Vunnen övningsrunda byter bakgrundsfärg (skriver över manuellt val)', afterWin !== '#fbcfe8' && /^#[0-9a-f]{6}$/.test(afterWin ?? ''), `Rosa → ${afterWin}`)
+  check('Ny bakgrund syns på sidan', (await bodyBg()) !== 'rgb(251, 207, 232)', await bodyBg())
+  await page.close()
+  await context.close()
+  page = mainPage
 
   check('Inga fel i konsolen', errors.length === 0, errors.join(' | '))
 } catch (e) {

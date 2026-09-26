@@ -20,6 +20,7 @@ import {
   type GameResult,
 } from './logic/storage'
 import { ANSWERS, isValidWord } from './logic/words'
+import { pickRandomColor, shouldAutoChangeColor } from './ui/colors'
 import { useBackgroundColor } from './ui/useBackgroundColor'
 
 const gameReducer = createGameReducer(isValidWord)
@@ -101,6 +102,13 @@ export default function App() {
   const showResult = useCallback(() => setModal('result'), [])
 
   const game = mode === 'daily' ? daily : practice
+
+  // Körs när sista raden i en omgång vänts klart (inte när en avslutad omgång återställs).
+  const handleRevealComplete = useCallback(() => {
+    setModal('result')
+    // Vunnen övningsrunda → ny slumpad bakgrund, som också skriver över det manuella valet.
+    if (shouldAutoChangeColor(game.mode, game.status)) setBackgroundColor((current) => pickRandomColor(current))
+  }, [game.mode, game.status, setBackgroundColor])
   const dispatch = (action: GameAction) => (mode === 'daily' ? dispatchDaily : dispatchPractice)(action)
 
   const startNextPracticeWord = () => {
@@ -149,7 +157,7 @@ export default function App() {
         game={game}
         dispatch={dispatch}
         keyboardActive={modal === null}
-        onRevealComplete={showResult}
+        onRevealComplete={handleRevealComplete}
         finishedActions={finishedActions}
       />
       {/* Modalerna monteras bara när de är öppna, så statistiken läses färskt och nedräkningen inte tickar i onödan */}

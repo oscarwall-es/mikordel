@@ -2,6 +2,7 @@
  * Bakgrundsfärg: palett, kontrastberäkning och slumpning. Rena funktioner utan React,
  * plus en liten, fristående persistens (medvetet skild från spelets storage.ts).
  */
+import type { GameMode, GameStatus } from '../logic/game'
 
 export interface Swatch {
   name: string
@@ -109,6 +110,14 @@ export function pickRandomColor(
   const candidates = palette.filter((s) => normalizeHex(s.hex) !== normalizeHex(current))
   const pool = candidates.length > 0 ? candidates : palette
   return pool[Math.floor(random() * pool.length)].hex
+}
+
+/**
+ * Om bakgrunden ska bytas automatiskt när en omgång är slut: bara vid vunnen omgång i
+ * öva-läget, aldrig för dagens ord eller vid förlust.
+ */
+export function shouldAutoChangeColor(mode: GameMode, status: GameStatus): boolean {
+  return mode === 'practice' && status === 'won'
 }
 
 // ---------------------------------------------------------------------------

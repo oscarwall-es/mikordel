@@ -6,8 +6,10 @@ import {
   loadBackgroundColor,
   pageColorsFor,
   PALETTE,
+  pickRandomColor,
   relativeLuminance,
   saveBackgroundColor,
+  shouldAutoChangeColor,
 } from './colors'
 
 const memoryStore = () => {
@@ -58,6 +60,39 @@ describe('kontrast', () => {
 
   it('ogiltig färg faller tillbaka på standardfärgen', () => {
     expect(pageColorsFor('rött').background).toBe(DEFAULT_BACKGROUND)
+  })
+})
+
+describe('automatiskt färgbyte', () => {
+  it('slumpar aldrig samma färg två gånger i rad', () => {
+    let current = DEFAULT_BACKGROUND
+    for (let i = 0; i < 1000; i++) {
+      const next = pickRandomColor(current)
+      expect(next).not.toBe(current)
+      current = next
+    }
+  })
+
+  it('alla andra färger kan komma, men aldrig den nuvarande', () => {
+    const seen = new Set<string>()
+    for (let r = 0; r < 1; r += 0.01) seen.add(pickRandomColor(DEFAULT_BACKGROUND, () => r))
+    expect(seen.has(DEFAULT_BACKGROUND)).toBe(false)
+    expect(seen.size).toBe(PALETTE.length - 1)
+  })
+
+  it('jämför skiftlägesokänsligt och byter även bort från en egen färg utanför paletten', () => {
+    expect(pickRandomColor('#1E293B', () => 0)).not.toBe(DEFAULT_BACKGROUND)
+    expect(PALETTE.map((s) => s.hex)).toContain(pickRandomColor('#123456'))
+  })
+
+  it.each([
+    ['practice', 'won', true],
+    ['practice', 'lost', false],
+    ['practice', 'playing', false],
+    ['daily', 'won', false],
+    ['daily', 'lost', false],
+  ] as const)('%s + %s → byt färg: %s', (mode, status, expected) => {
+    expect(shouldAutoChangeColor(mode, status)).toBe(expected)
   })
 })
 
