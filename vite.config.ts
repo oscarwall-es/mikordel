@@ -7,9 +7,12 @@ import { defineConfig } from 'vite'
 process.env.TZ = 'Europe/Stockholm'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command, isPreview }) => ({
+  // GitHub Pages serverar projektet under /<repo-namn>/. Bygget och `vite preview` använder samma
+  // sökväg; dev-servern (och Vitest) körs kvar på /.
+  base: command === 'build' || isPreview ? '/ordel/' : '/',
   plugins: [react(), tailwindcss()],
   test: {
     include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
   },
-})
+}))
