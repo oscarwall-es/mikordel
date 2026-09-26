@@ -25,6 +25,39 @@
   --animate-pop: pop 100ms ease-out;
   --animate-shake: shake 500ms ease-in-out;
   --animate-flip: flip 500ms ease-in-out both;
+  /* Regn vid vinst. Varaktighet och fördröjning sätts per partikel (CelebrationOverlay). */
+  --animate-celebrate-fall: celebrate-fall 2s cubic-bezier(0.3, 0, 0.7, 1) both;
+  --animate-celebrate-fade: celebrate-fade 2s ease-in-out both;
+
+  /* Faller från ovanför skärmen till nedanför, med sidledsdrift och rotation. */
+  @keyframes celebrate-fall {
+    0% {
+      transform: translate3d(0, -12vh, 0) rotate(0deg);
+      opacity: 0;
+    }
+    8% {
+      opacity: 1;
+    }
+    85% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate3d(var(--drift, 0px), 105vh, 0) rotate(var(--rotate, 0deg));
+      opacity: 0;
+    }
+  }
+
+  /* Reducerade animationer: ingen rörelse, bara en stilla in- och uttoning på plats. */
+  @keyframes celebrate-fade {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    30%,
+    70% {
+      opacity: 1;
+    }
+  }
 
   @keyframes pop {
     50% {

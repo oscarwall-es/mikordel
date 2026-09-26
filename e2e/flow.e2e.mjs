@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Flödestest i en riktig webbläsare: första besöket, återställning efter omladdning, vinst,
- * blockerat omspel, statistik, flikbyte, övningsläge, gammalt sparat läge och bakgrundsfärg.
+ * blockerat omspel, statistik, flikbyte, övningsläge, gammalt sparat läge, bakgrundsfärg
+ * (manuell och automatisk vid vunnen övningsrunda) och regn-effekten vid vinst.
  *
  * Kör:  npm run test:e2e
  *
@@ -97,6 +98,16 @@ const clickText = (text) =>
   )
 const storage = (key) => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), key)
 const reload = () => page.reload({ waitUntil: 'networkidle0' })
+/** Regn-effekten: om den visas (som öppen popover) och hur många stjärnor/hjärtan den har. */
+const celebration = () =>
+  page.evaluate(() => {
+    const el = document.querySelector('[data-celebration]')
+    return {
+      shown: !!el && el.matches(':popover-open'),
+      stars: document.querySelectorAll('[data-particle=star]').length,
+      hearts: document.querySelectorAll('[data-particle=heart]').length,
+    }
+  })
 
 let failures = 0
 const check = (name, ok, info = '') => {
@@ -134,6 +145,14 @@ try {
   await guess(answer)
   await sleep(400)
   check('Vinst → resultatet visas', (await openDialog()) === 'Snyggt!')
+  const dailyCelebration = await celebration()
+  check(
+    'Vinst i dagens ord → regn av stjärnor och hjärtan',
+    dailyCelebration.shown && dailyCelebration.stars > 0 && dailyCelebration.hearts > 0,
+    JSON.stringify(dailyCelebration),
+  )
+  await sleep(3000)
+  check('Regnet försvinner efter några sekunder', !(await celebration()).shown)
   const daily = (await storage('ordel:stats:v1'))?.daily
   check(
     'Statistik registrerad (1 spelad, 1 vinst, streak 1, vinst på 3 försök)',
@@ -173,6 +192,7 @@ try {
     for (const w of losingGuesses) await guess(w)
     await sleep(400)
     practiceAnswers.push(await page.evaluate(() => document.querySelector('dialog[open] div[aria-label]')?.getAttribute('aria-label')))
+    if (round === 0) check('Förlorad övningsrunda → inget regn', !(await celebration()).shown)
     if (round === 0) {
       const buttons = await page.evaluate(() => [...document.querySelectorAll('dialog[open] button')].map((b) => b.textContent))
       check('Övningsomgång slut → resultat med "Nästa ord"', buttons.includes('Nästa ord'))
@@ -252,6 +272,12 @@ try {
   await sleep(TRANSITION_MS)
   const afterWin = await page.evaluate(() => localStorage.getItem('ordel:background:v1'))
   check('Vunnen övningsrunda → resultat visas', (await openDialog()) === 'Snyggt!')
+  const practiceCelebration = await celebration()
+  check(
+    'Vunnen övningsrunda → regn av stjärnor och hjärtan',
+    practiceCelebration.shown && practiceCelebration.stars > 0 && practiceCelebration.hearts > 0,
+    JSON.stringify(practiceCelebration),
+  )
   check('Vunnen övningsrunda byter bakgrundsfärg (skriver över manuellt val)', afterWin !== '#fbcfe8' && /^#[0-9a-f]{6}$/.test(afterWin ?? ''), `Rosa → ${afterWin}`)
   check('Ny bakgrund syns på sidan', (await bodyBg()) !== 'rgb(251, 207, 232)', await bodyBg())
   await page.close()

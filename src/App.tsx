@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
+import { CelebrationOverlay } from './components/CelebrationOverlay'
 import { ColorModal } from './components/ColorModal'
 import { GameView } from './components/GameView'
 import { Header } from './components/Header'
@@ -20,6 +21,7 @@ import {
   type GameResult,
 } from './logic/storage'
 import { ANSWERS, isValidWord } from './logic/words'
+import { shouldCelebrate } from './ui/celebration'
 import { pickRandomColor, shouldAutoChangeColor } from './ui/colors'
 import { useBackgroundColor } from './ui/useBackgroundColor'
 
@@ -60,6 +62,9 @@ export default function App() {
 
   const [mode, setMode] = useState<GameMode>('daily')
   const [backgroundColor, setBackgroundColor] = useBackgroundColor()
+  // Räknas upp vid varje vinst; ny key på CelebrationOverlay spelar upp effekten igen.
+  const [celebration, setCelebration] = useState(0)
+  const endCelebration = useCallback(() => setCelebration(0), [])
   // Redan klart för i dag → visa resultatet direkt. Första besöket → visa hjälpen.
   const [modal, setModal] = useState<ModalName>(() =>
     isFinished(daily) ? 'result' : hasSeenHelp() ? null : 'help',
@@ -106,6 +111,8 @@ export default function App() {
   // Körs när sista raden i en omgång vänts klart (inte när en avslutad omgång återställs).
   const handleRevealComplete = useCallback(() => {
     setModal('result')
+    // Regn av stjärnor och hjärtan vid varje vinst, i båda lägena
+    if (shouldCelebrate(game.status)) setCelebration((n) => n + 1)
     // Vunnen övningsrunda → ny slumpad bakgrund, som också skriver över det manuella valet.
     if (shouldAutoChangeColor(game.mode, game.status)) setBackgroundColor((current) => pickRandomColor(current))
   }, [game.mode, game.status, setBackgroundColor])
@@ -184,6 +191,8 @@ export default function App() {
           onPracticeMore={goPractice}
         />
       )}
+      {/* Sist, så att popovern öppnas efter resultatdialogen och hamnar ovanför den */}
+      {celebration > 0 && <CelebrationOverlay key={celebration} onDone={endCelebration} />}
     </div>
   )
 }
