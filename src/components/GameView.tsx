@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch } from 'react'
+import { useEffect, useState, type Dispatch, type ReactNode } from 'react'
 import { computeKeyStatuses, type GameAction, type GameErrorKind, type GameState } from '../logic/game'
 import { Board } from './Board'
 import { Keyboard } from './Keyboard'
@@ -18,6 +18,8 @@ interface GameViewProps {
   keyboardActive: boolean
   /** Anropas när sista raden vänts klart och omgången är slut. */
   onRevealComplete?: () => void
+  /** Visas under rutnätet när omgången är slut och sista raden vänts klart. */
+  finishedActions?: ReactNode
 }
 
 /**
@@ -25,7 +27,7 @@ interface GameViewProps {
  * (vilka rader som redan vänts) börjar om. Rader som fanns vid montering – t.ex. återställda
  * från localStorage – visas direkt utan animation.
  */
-export function GameView({ game, dispatch, keyboardActive, onRevealComplete }: GameViewProps) {
+export function GameView({ game, dispatch, keyboardActive, onRevealComplete, finishedActions }: GameViewProps) {
   const [revealedCount, setRevealedCount] = useState(game.guesses.length)
   const revealing = game.guesses.length > revealedCount
   const revealRow = revealing ? game.guesses.length - 1 : null
@@ -71,7 +73,7 @@ export function GameView({ game, dispatch, keyboardActive, onRevealComplete }: G
 
   return (
     <>
-      <main className="relative flex min-h-0 flex-1 items-center justify-center px-4 py-2">
+      <main className="relative flex min-h-0 flex-1 flex-col items-center px-4 py-2">
         <div
           role="status"
           aria-live="polite"
@@ -83,13 +85,18 @@ export function GameView({ game, dispatch, keyboardActive, onRevealComplete }: G
             </div>
           )}
         </div>
-        <Board
-          guesses={game.guesses}
-          currentGuess={game.currentGuess}
-          acceptsInput={acceptsInput}
-          revealRow={revealRow}
-          shakeKey={game.error?.id ?? null}
-        />
+        <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+          <Board
+            guesses={game.guesses}
+            currentGuess={game.currentGuess}
+            acceptsInput={acceptsInput}
+            revealRow={revealRow}
+            shakeKey={game.error?.id ?? null}
+          />
+        </div>
+        {!inProgress && !revealing && finishedActions && (
+          <div className="flex shrink-0 gap-2 pt-3">{finishedActions}</div>
+        )}
       </main>
       <div className="mx-auto w-full max-w-[420px] px-2 pb-3">
         <Keyboard

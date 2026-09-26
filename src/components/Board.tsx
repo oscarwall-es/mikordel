@@ -63,7 +63,13 @@ export function Board({ guesses, currentGuess, acceptsInput, revealRow, shakeKey
   const currentRow = guesses.length
 
   return (
-    <div className="grid w-full max-w-[322px] grid-rows-6 gap-2" role="grid" aria-label="Spelplan">
+    // Fyller tillgänglig höjd men blir aldrig större än 322×388 (skärmdumpens mått), så att
+    // allt får plats även på låga skärmar. Bredden följer höjden via aspect-ratio.
+    <div
+      className="grid aspect-[322/388] h-full max-h-[388px] max-w-full grid-rows-6 gap-2"
+      role="grid"
+      aria-label="Spelplan"
+    >
       {Array.from({ length: MAX_GUESSES }, (_, row) => {
         const guess = guesses[row]
         const isCurrent = row === currentRow

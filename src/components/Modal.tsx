@@ -18,7 +18,12 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
+    if (open && !dialog.open) {
+      dialog.showModal()
+      // Fokus på dialogen i stället för första knappen (stäng-krysset), så ingen fokusring
+      // syns när rutan öppnas automatiskt. Tab går vidare in bland knapparna som vanligt.
+      dialog.focus()
+    }
     if (!open && dialog.open) dialog.close()
   }, [open])
 
@@ -26,6 +31,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
     <dialog
       ref={ref}
       aria-labelledby={titleId}
+      tabIndex={-1}
       // Esc: låt React-state styra stängningen i stället för webbläsaren
       onCancel={(e) => {
         e.preventDefault()
@@ -35,7 +41,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
-      className="m-0 h-dvh max-h-none w-full max-w-none bg-surface text-text backdrop:bg-black/60 sm:m-auto sm:h-auto sm:max-h-[90dvh] sm:max-w-[420px] sm:rounded-2xl"
+      className="m-0 h-dvh outline-none max-h-none w-full max-w-none bg-surface text-text backdrop:bg-black/60 sm:m-auto sm:h-auto sm:max-h-[90dvh] sm:max-w-[420px] sm:rounded-2xl"
     >
       <div className="relative flex min-h-full flex-col px-4 pt-10 pb-4">
         <button
