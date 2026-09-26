@@ -10,7 +10,7 @@ process.env.TZ = 'Europe/Stockholm'
 export default defineConfig(({ command, isPreview }) => ({
   // GitHub Pages serverar projektet under /<repo-namn>/. Bygget och `vite preview` använder samma
   // sökväg; dev-servern (och Vitest) körs kvar på /.
-  base: command === 'build' || isPreview ? '/ordel/' : '/',
+  base: command === 'build' || isPreview ? '/mikordel/' : '/',
   plugins: [react(), tailwindcss()],
   test: {
     include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
