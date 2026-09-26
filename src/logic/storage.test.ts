@@ -3,8 +3,10 @@ import {
   applyResult,
   emptyStats,
   getCurrentStreak,
+  hasSeenHelp,
   loadDailyState,
   loadStats,
+  markHelpSeen,
   memoryStore,
   recordResult,
   saveDailyState,
@@ -149,5 +151,13 @@ describe('winPercent', () => {
     expect(winPercent(0, 0)).toBe(0)
     expect(winPercent(3, 2)).toBe(67)
     expect(winPercent(4, 4)).toBe(100)
+  })
+})
+
+describe('hjälp vid första besöket', () => {
+  it('är osedd tills den markerats', () => {
+    expect(hasSeenHelp(store)).toBe(false)
+    markHelpSeen(store)
+    expect(hasSeenHelp(store)).toBe(true)
   })
 })

@@ -10,6 +10,7 @@ export interface KeyValueStore {
 
 const DAILY_KEY = 'ordel:daily:v1'
 const STATS_KEY = 'ordel:stats:v1'
+const HELP_SEEN_KEY = 'ordel:help-seen:v1'
 
 /**
  * localStorage kan saknas eller kasta (privat läge, blockerade cookies). Då faller vi tillbaka
@@ -222,4 +223,17 @@ export function getCurrentStreak(daily: DailyStats, today: string): number {
 
 export function winPercent(played: number, wins: number): number {
   return played === 0 ? 0 : Math.round((wins / played) * 100)
+}
+
+// ---------------------------------------------------------------------------
+// Övrigt
+// ---------------------------------------------------------------------------
+
+/** Om spelaren redan sett hjälpen – används för att visa den automatiskt vid första besöket. */
+export function hasSeenHelp(store?: KeyValueStore): boolean {
+  return readJson(resolveStore(store), HELP_SEEN_KEY) === true
+}
+
+export function markHelpSeen(store?: KeyValueStore): void {
+  writeJson(resolveStore(store), HELP_SEEN_KEY, true)
 }
