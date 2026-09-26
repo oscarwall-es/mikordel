@@ -67,7 +67,7 @@ export function Keyboard({ keyStatuses, onLetter, onEnter, onBackspace, disabled
         disabled={disabled}
         onMouseDown={noFocus}
         onClick={onEnter}
-        className={`${keyBase} col-span-5 col-start-18 row-start-4 bg-action text-base tracking-wide`}
+        className={`${keyBase} col-span-5 col-start-18 row-start-4 bg-action text-base tracking-[0.03em]`}
       >
         Spela
       </button>

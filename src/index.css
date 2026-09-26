@@ -1,19 +1,23 @@
 @import "tailwindcss";
 
-/* Färger avlästa från skärmdumparna. */
+/*
+ * Färger avlästa från skärmdumparna efter konvertering från Display P3 till sRGB.
+ * De motsvarar Tailwind v3:s standardpalett (angiven i hex, eftersom v4:s OKLCH-palett skiljer sig något).
+ */
 @theme {
-  --color-page: #20293a; /* spelbakgrund */
-  --color-surface: #101729; /* modaler */
-  --color-card: #20293a; /* kort i modaler */
-  --color-tile: #364154; /* tom/ifylld ruta */
-  --color-key: #4a5567; /* tangent */
-  --color-icon: #cdd5e0;
-  --color-action: #2d689d; /* SPELA, aktiv flik */
-  --color-correct: #4ca154; /* grön */
-  --color-present: #652dd1; /* lila */
-  --color-absent: #101729; /* svart */
-  --color-tile-active: #e2e8f0; /* ram på aktiv ruta */
-  --color-tile-filled: #718096; /* ram på ifylld, ej utvärderad ruta */
+  --color-page: #1e293b; /* slate-800, spelbakgrund */
+  --color-surface: #0f172a; /* slate-900, modaler */
+  --color-card: #1e293b; /* slate-800, kort i modaler */
+  --color-tile: #334155; /* slate-700, tom/ifylld ruta */
+  --color-key: #475569; /* slate-600, tangent */
+  --color-icon: #cbd5e1; /* slate-300 */
+  --color-text: #f1f5f9; /* slate-100, titel och brödtext */
+  --color-action: #0369a1; /* sky-700, SPELA och aktiv flik */
+  --color-correct: #16a34a; /* green-600 */
+  --color-present: #6d28d9; /* violet-700 */
+  --color-absent: #0f172a; /* slate-900 */
+  --color-tile-active: #e2e8f0; /* slate-200, ram på aktiv ruta */
+  --color-tile-filled: #64748b; /* slate-500, ram på ifylld, ej utvärderad ruta */
 
   --animate-pop: pop 100ms ease-out;
   --animate-shake: shake 500ms ease-in-out;
@@ -72,7 +76,7 @@
 html,
 body {
   background-color: var(--color-page);
-  color: white;
+  color: var(--color-text);
   /* Förhindrar dubbeltrycks-zoom på tangentbordet i mobilen */
   touch-action: manipulation;
 }
