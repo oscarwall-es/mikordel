@@ -25,10 +25,13 @@ describe.each(Object.entries(lists).map(([path, list]) => [name(path), list] as 
   })
 })
 
-// answers.json ⊆ valid.json, answers.new.json ⊆ valid.new.json osv.
+// answers.json ⊆ valid.json, answers.new.json ⊆ valid.new.json osv. Listor utan egen
+// valid-motsvarighet (t.ex. answers.candidates.json) prövas mot valid.new.json, annars valid.json.
+const validFor = (answersPath: string) =>
+  [answersPath.replace('answers', 'valid'), '../data/valid.new.json', '../data/valid.json'].find((p) => p in lists)!
 const answerLists = Object.keys(lists).filter((p) => name(p).startsWith('answers'))
-describe.each(answerLists.map((p) => [name(p), p, p.replace('answers', 'valid')] as const))(
-  '%s ⊆ motsvarande valid-lista',
+describe.each(answerLists.map((p) => [name(p), p, validFor(p)] as const))(
+  '%s ⊆ valid-lista',
   (_, answersPath, validPath) => {
     it('alla svarsord finns i valid-listan', () => {
       expect(lists[validPath], `${name(validPath)} saknas`).toBeDefined()

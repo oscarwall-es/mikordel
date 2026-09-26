@@ -1,32 +1,46 @@
-# React + TypeScript + Vite
+# Ordel
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+En svensk Wordle-klon: gissa ett svenskt ord på fem bokstäver på max sex försök. Ett gemensamt
+**dagens ord** per kalenderdag, plus ett **övningsläge** med obegränsat antal slumpade ord.
 
-Currently, two official plugins are available:
+Helt statisk frontend (React + Vite + TypeScript + Tailwind CSS). Spelläge och statistik sparas i
+webbläsarens `localStorage`.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Kom igång
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev      # utvecklingsserver
+npm test         # enhetstester (Vitest)
+npm run build    # typkontroll + produktionsbygge i dist/
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Ordlistor
+
+| Fil | Innehåll | Används till |
+|---|---|---|
+| `src/data/valid.json` | alla godkända svenska ord på 5 bokstäver, inklusive böjningsformer | validera gissningar |
+| `src/data/answers.json` | kurerade, vanliga grundformer i fast blandad ordning | dagens ord och övningsord |
+
+Listorna byggs med två skript (källfilerna hämtas till `raw/`, som inte versionshanteras):
+
+```bash
+curl -o raw/swe_wordlist_raw.txt https://raw.githubusercontent.com/martinlindhe/wordlist_swedish/master/swe_wordlist
+curl -o raw/kelly.xml https://svn.spraakbanken.gu.se/sb-arkiv/pub/lmf/kelly/kelly.xml
+
+npm run words -- raw/swe_wordlist_raw.txt src/data/valid.json
+npm run answers -- raw/kelly.xml src/data/valid.json src/data/answers.candidates.json
+```
+
+`answers.candidates.json` granskas manuellt innan den blir `answers.json`.
+
+### Källor och licenser
+
+- **Giltiga ord:** [wordlist_swedish](https://github.com/martinlindhe/wordlist_swedish) av Martin
+  Lindhe, MIT-licens. Filtrerad till ord på fem bokstäver (a–ö) utan namn, förkortningar,
+  bindestreck och siffror.
+- **Svarsord:** [Kelly-listan](https://spraakbanken.gu.se/en/resources/kelly), Språkbanken Text,
+  Göteborgs universitet, licensierad under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Ändringar: listan är begränsad till
+  grundformer på fem bokstäver som även finns i listan över giltiga ord, manuellt granskad och
+  blandad i en fast ordning.

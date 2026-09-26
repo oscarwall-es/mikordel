@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "words": "node scripts/build-wordlist.mjs",
+    "answers": "node scripts/build-answers.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
