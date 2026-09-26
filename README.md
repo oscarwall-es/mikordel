@@ -12,6 +12,7 @@ webbläsarens `localStorage`.
 npm install
 npm run dev      # utvecklingsserver
 npm test         # enhetstester (Vitest)
+npm run test:e2e # flödestest i headless Chrome (kräver installerad Chrome, ev. CHROME_PATH)
 npm run build    # typkontroll + produktionsbygge i dist/
 ```
 
