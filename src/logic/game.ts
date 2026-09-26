@@ -55,6 +55,11 @@ function mergeKeyStatuses(
   return next
 }
 
+/** Kumulativ tangentbordsstatus för en lista gissningar (t.ex. alla utom raden som håller på att vändas). */
+export function computeKeyStatuses(guesses: readonly EvaluatedGuess[]): GameState['keyStatuses'] {
+  return guesses.reduce(mergeKeyStatuses, {})
+}
+
 /** Applicerar en (redan validerad) gissning och räknar ut ny status. */
 function applyGuess(state: GameState, word: string): GameState {
   const guess: EvaluatedGuess = { word, statuses: evaluateGuess(word, state.answer) }

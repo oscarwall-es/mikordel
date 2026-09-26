@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createGameReducer, createGameState, type GameAction, type GameState } from './game'
+import { computeKeyStatuses, createGameReducer, createGameState, type GameAction, type GameState } from './game'
 
 const VALID = new Set(['skola', 'stark', 'glass', 'kaffe', 'mamma', 'lampa', 'stuga', 'björn', 'fågel', 'hälsa', 'äpple'])
 const reducer = createGameReducer((w) => VALID.has(w))
@@ -134,6 +134,12 @@ describe('tangentbordets kumulativa färgning', () => {
     expect(play('lampa', 'mamma').keyStatuses.m).toBe('correct')
     // "kaffe" mot "fågel": första f lila, andra svart → f ska vara lila
     expect(play('fågel', 'kaffe').keyStatuses.f).toBe('present')
+  })
+
+  it('computeKeyStatuses ger samma resultat som reducern', () => {
+    const s = play('skola', 'lampa', 'glass', 'stark')
+    expect(computeKeyStatuses(s.guesses)).toEqual(s.keyStatuses)
+    expect(computeKeyStatuses(s.guesses.slice(0, 1))).toEqual(play('skola', 'lampa').keyStatuses)
   })
 
   it('bokstäver som inte gissats saknar status', () => {
