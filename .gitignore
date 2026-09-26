@@ -25,3 +25,6 @@ dist-ssr
 
 # Lokal Claude Code-konfiguration
 .claude/
+
+# Rå källfiler för ordlistan (hämtas med curl, se README)
+raw/

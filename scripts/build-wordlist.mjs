@@ -6,20 +6,22 @@
  *   node scripts/build-wordlist.mjs <indata> <utdata.json> [--length 5] [--include fil.json ...] [--shuffle]
  *
  * Exempel:
- *   npm run words -- raw/saldo.txt src/data/valid.json --include src/data/answers.json
+ *   npm run words -- raw/swe_wordlist_raw.txt src/data/valid.json --include src/data/answers.json
  *   npm run words -- raw/svarsord.txt src/data/answers.json --shuffle
  *
- * Indata: en JSON-array med ord (om filen slutar på .json), annars en textfil med ett ord per rad. Tål även:
- *   - Hunspell .dic-format ("ord/FLAGGOR", första raden kan vara en ordräkning)
- *   - tab- eller mellanslagsseparerade kolumner (första kolumnen används)
- *   - tomma rader och kommentarer som börjar med #
+ * Indata: en JSON-array med ord (om filen slutar på .json), annars en textfil med ett ord per rad
+ * (hela raden är ordet). Tål tomma rader, kommentarer som börjar med # och tabbseparerade
+ * kolumner (första kolumnen används). Mellanslag delar INTE raden – "a priori" är ett
+ * flerordsuttryck och filtreras bort, inte tolkas som ordet "a".
  *
- * Filtrering:
- *   - ord som börjar med versal räknas som namn och tas bort
- *   - ord med bindestreck, apostrof, siffror, punkt eller mellanslag tas bort
- *   - allt normaliseras till NFC + gemener; Å, Ä, Ö räknas som egna bokstäver
- *   - endast a–z samt å, ä, ö tillåts (ord med t.ex. é eller ü tas bort,
- *     eftersom de inte går att skriva på spelets tangentbord)
+ * Filtrering, i denna ordning (första träffen avgör anledningen i sammanfattningen):
+ *   1. versal någonstans i ordet → namn eller förkortning (Anna, LVU, mRNA)
+ *   2. bindestreck eller apostrof
+ *   3. mellanslag (flerordsuttryck)
+ *   4. siffror
+ *   5. andra tecken än a–z, å, ä, ö (t.ex. é, ü, /, .) – går inte att skriva på spelets tangentbord
+ *   6. fel längd
+ * Allt normaliseras till NFC + gemener först; Å, Ä, Ö räknas som egna bokstäver.
  *
  * --include slår ihop ord från en eller flera befintliga JSON-listor, t.ex. så att
  * valid.json garanterat innehåller alla ord i answers.json.
@@ -90,32 +92,60 @@ function parseArgs(argv) {
   return { input: positional[0], output: positional[1], length, include, shuffle }
 }
 
+export const REASONS = {
+  empty: 'tom rad / kommentar',
+  uppercase: 'versal (namn/förkortning)',
+  hyphen: 'bindestreck/apostrof',
+  space: 'mellanslag (flerordsuttryck)',
+  digit: 'siffror',
+  chars: 'otillåtna tecken (é, ü, /, . …)',
+  length: 'fel längd',
+}
+
+/**
+ * Klassar en rad: `{ word }` om den godkänns, annars `{ reason }` (nyckel i REASONS).
+ * `hadLength` anger om raden hade rätt antal tecken – användbart för att se vad filtren
+ * faktiskt tar bort bland kandidaterna.
+ */
+export function classifyEntry(line, length) {
+  const raw = String(line).split('\t')[0].trim().normalize('NFC')
+  if (!raw || raw.startsWith('#')) return { reason: 'empty', hadLength: false }
+  const hadLength = Array.from(raw).length === length
+  const lower = raw.toLowerCase()
+  if (raw !== lower) return { reason: 'uppercase', hadLength }
+  if (/[-‐‑'’]/u.test(raw)) return { reason: 'hyphen', hadLength }
+  if (/\s/u.test(raw)) return { reason: 'space', hadLength }
+  if (/\p{N}/u.test(raw)) return { reason: 'digit', hadLength }
+  if (!ALLOWED.test(lower)) return { reason: 'chars', hadLength }
+  if (!hadLength) return { reason: 'length', hadLength }
+  return { word: lower }
+}
+
 /** Returnerar det normaliserade ordet, eller null om raden ska kastas. */
 export function normalizeEntry(line, length) {
-  const raw = line.trim().split(/[\t ]/)[0]?.split('/')[0]
-  if (!raw || raw.startsWith('#')) return null
-  const word = raw.normalize('NFC')
-  // Versal i början = egennamn (Anna, Sverige, ...)
-  if (word[0] !== word[0].toLowerCase()) return null
-  const lower = word.toLowerCase()
-  if (!ALLOWED.test(lower)) return null
-  if (Array.from(lower).length !== length) return null
-  return lower
+  return classifyEntry(line, length).word ?? null
 }
 
 function main() {
   const { input, output, length, include, shuffle } = parseArgs(process.argv.slice(2))
   const words = new Set()
-  const stats = { lines: 0, kept: 0 }
+  const rejected = Object.fromEntries(Object.keys(REASONS).map((k) => [k, { total: 0, withLength: 0 }]))
+  let accepted = 0
 
   const text = readFileSync(input, 'utf8')
   const lines = input.endsWith('.json') ? JSON.parse(text) : text.split(/\r?\n/)
+  if (lines.at(-1) === '') lines.pop() // avslutande radbrytning
   for (const line of lines) {
-    stats.lines++
-    const word = normalizeEntry(line, length)
-    if (word) words.add(word)
+    const result = classifyEntry(line, length)
+    if (result.word) {
+      accepted++
+      words.add(result.word)
+    } else {
+      rejected[result.reason].total++
+      if (result.hadLength) rejected[result.reason].withLength++
+    }
   }
-  stats.kept = words.size
+  const unique = words.size
 
   for (const file of include) {
     for (const w of JSON.parse(readFileSync(file, 'utf8'))) {
@@ -128,12 +158,17 @@ function main() {
   const sorted = [...words].sort(new Intl.Collator('sv').compare)
   const result = shuffle ? seededShuffle(sorted) : sorted
   writeFileSync(output, JSON.stringify(result, null, 2) + '\n')
-  console.log(
-    `${stats.lines} rader lästa, ${stats.kept} unika ${length}-bokstavsord` +
-      (include.length ? `, ${sorted.length} efter --include` : '') +
-      (shuffle ? `, blandade med seed ${SHUFFLE_SEED}` : '') +
-      ` → ${output}`,
-  )
+  const pad = (v, n = 8) => String(v).padStart(n)
+  console.log(`${pad(lines.length)}  rader lästa från ${input}`)
+  console.log(`\nBortfiltrerade (i filtrens ordning)        totalt   varav med ${length} tecken`)
+  for (const [key, { total, withLength }] of Object.entries(rejected)) {
+    if (total) console.log(`  ${REASONS[key].padEnd(38)} ${pad(total)}   ${pad(key === 'length' ? '–' : withLength, 10)}`)
+  }
+  console.log(`\n${pad(accepted)}  godkända rader`)
+  if (accepted !== unique) console.log(`${pad(accepted - unique)}  dubbletter efter normalisering`)
+  console.log(`${pad(unique)}  unika ${length}-bokstavsord`)
+  if (include.length) console.log(`${pad(sorted.length)}  efter --include ${include.join(', ')}`)
+  console.log(`\n→ ${output}${shuffle ? ` (blandad, seed ${SHUFFLE_SEED})` : ' (alfabetisk)'}`)
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()
