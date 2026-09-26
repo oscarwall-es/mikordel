@@ -10,7 +10,7 @@ export const SHARE_EMOJI: Record<LetterStatus, string> = {
 /**
  * Delningstext utan själva ordet, t.ex.
  *
- *   Ordel #1000 3/6
+ *   Mikordel #1000 3/6
  *
  *   ⬛🟪⬛⬛⬛
  *   🟩⬛🟪⬛⬛
@@ -21,7 +21,7 @@ export const SHARE_EMOJI: Record<LetterStatus, string> = {
  */
 export function buildShareText(game: Pick<GameState, 'mode' | 'status' | 'guesses'>, dayNumber: number): string {
   const score = game.status === 'won' ? game.guesses.length : 'X'
-  const label = game.mode === 'daily' ? `Ordel #${dayNumber + 1}` : 'Ordel (övning)'
+  const label = game.mode === 'daily' ? `Mikordel #${dayNumber + 1}` : 'Mikordel (övning)'
   const rows = game.guesses.map((g) => g.statuses.map((s) => SHARE_EMOJI[s]).join(''))
   return `${label} ${score}/${MAX_GUESSES}\n\n${rows.join('\n')}`
 }

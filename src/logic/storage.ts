@@ -8,6 +8,7 @@ export interface KeyValueStore {
   setItem(key: string, value: string): void
 }
 
+// Nycklarna behåller det ursprungliga namnet "ordel" – byts de förlorar befintliga spelare sin statistik.
 const DAILY_KEY = 'ordel:daily:v1'
 const STATS_KEY = 'ordel:stats:v1'
 const HELP_SEEN_KEY = 'ordel:help-seen:v1'

@@ -20,7 +20,7 @@ export function Header({ onHelp, onStats }: HeaderProps) {
         </svg>
       </button>
 
-      <h1 className="text-center font-mono text-[25px] font-medium tracking-wide text-text">Ordel</h1>
+      <h1 className="text-center font-mono text-[25px] font-medium tracking-wide text-text">Mikordel</h1>
 
       <button type="button" className={iconButton} onClick={onStats} aria-label="Statistik">
         {/* Stapeldiagram, tre staplar */}

@@ -1,4 +1,4 @@
-# Ordel
+# Mikordel
 
 En svensk Wordle-klon: gissa ett svenskt ord på fem bokstäver på max sex försök. Ett gemensamt
 **dagens ord** per kalenderdag, plus ett **övningsläge** med obegränsat antal slumpade ord.
