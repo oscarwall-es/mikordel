@@ -2,8 +2,10 @@ import { useReducer, useState } from 'react'
 import { GameView } from './components/GameView'
 import { Header } from './components/Header'
 import { HelpModal } from './components/HelpModal'
-import { getDailyWord } from './logic/daily'
+import { StatsModal } from './components/StatsModal'
+import { getDailyWord, toDateKey } from './logic/daily'
 import { createGameReducer, createGameState } from './logic/game'
+import { loadStats } from './logic/storage'
 import { ANSWERS, isValidWord } from './logic/words'
 
 const gameReducer = createGameReducer(isValidWord)
@@ -22,6 +24,13 @@ export default function App() {
       <Header onHelp={() => setModal('help')} onStats={() => setModal('stats')} />
       <GameView game={game} dispatch={dispatch} keyboardActive={modal === null} />
       <HelpModal open={modal === 'help'} onClose={closeModal} />
+      <StatsModal
+        open={modal === 'stats'}
+        onClose={closeModal}
+        stats={loadStats()}
+        today={toDateKey(new Date())}
+        todayGuessCount={game.status === 'won' ? game.guesses.length : null}
+      />
     </div>
   )
 }
