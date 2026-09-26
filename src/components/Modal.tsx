@@ -41,7 +41,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
-      className="m-0 h-dvh outline-none max-h-none w-full max-w-none bg-surface text-text backdrop:bg-black/60 sm:m-auto sm:h-auto sm:max-h-[90dvh] sm:max-w-[420px] sm:rounded-2xl"
+      className="m-0 h-dvh outline-none max-h-none w-full max-w-none bg-surface text-text backdrop:bg-black/60 sm:m-auto sm:h-fit sm:max-h-[90dvh] sm:max-w-[420px] sm:rounded-2xl"
     >
       <div className="relative flex min-h-full flex-col px-4 pt-10 pb-4">
         <button
