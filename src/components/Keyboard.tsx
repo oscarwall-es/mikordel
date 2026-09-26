@@ -27,7 +27,7 @@ export function Keyboard({ keyStatuses, onLetter, onEnter, onBackspace, disabled
   const noFocus = (e: React.MouseEvent) => e.preventDefault()
 
   return (
-    <div className="grid w-full grid-cols-22 gap-x-1 gap-y-1.5" aria-label="Tangentbord">
+    <div className="grid w-full grid-cols-22 gap-[3px]" aria-label="Tangentbord">
       {ROWS.map((row, r) =>
         row.map((letter, i) => {
           const status = keyStatuses[letter]
@@ -38,7 +38,7 @@ export function Keyboard({ keyStatuses, onLetter, onEnter, onBackspace, disabled
               disabled={disabled}
               onMouseDown={noFocus}
               onClick={() => onLetter(letter)}
-              className={`${keyBase} col-span-2 text-lg ${status ? STATUS_BG[status] : 'bg-key'}`}
+              className={`${keyBase} col-span-2 text-base ${status ? STATUS_BG[status] : 'bg-key'}`}
               style={r === 2 && i === 0 ? { gridColumnStart: ROW3_START } : undefined}
               aria-label={`${letter.toUpperCase()}${status ? `, ${STATUS_LABEL[status]}` : ''}`}
             >
@@ -67,7 +67,7 @@ export function Keyboard({ keyStatuses, onLetter, onEnter, onBackspace, disabled
         disabled={disabled}
         onMouseDown={noFocus}
         onClick={onEnter}
-        className={`${keyBase} col-span-5 col-start-18 row-start-4 bg-action text-lg tracking-wide`}
+        className={`${keyBase} col-span-5 col-start-18 row-start-4 bg-action text-base tracking-wide`}
       >
         Spela
       </button>
