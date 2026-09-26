@@ -18,6 +18,9 @@
   --color-absent: #0f172a; /* slate-900 */
   --color-tile-active: #e2e8f0; /* slate-200, ram på aktiv ruta */
   --color-tile-filled: #64748b; /* slate-500, ram på ifylld, ej utvärderad ruta */
+  /* Text och ikoner direkt på bakgrunden. Skrivs över av useBackgroundColor efter vald färg. */
+  --color-on-page: #f1f5f9;
+  --color-on-page-muted: #cbd5e1;
 
   --animate-pop: pop 100ms ease-out;
   --animate-shake: shake 500ms ease-in-out;
@@ -73,10 +76,22 @@
   }
 }
 
+/* Kant runt rutor och tangenter när de smälter ihop med vald bakgrundsfärg (se ui/colors.ts). */
+:root {
+  --component-edge: transparent;
+  --active-ring: transparent;
+}
+
 html,
 body {
   background-color: var(--color-page);
   color: var(--color-text);
   /* Förhindrar dubbeltrycks-zoom på tangentbordet i mobilen */
   touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body {
+    transition: background-color 600ms ease;
+  }
 }

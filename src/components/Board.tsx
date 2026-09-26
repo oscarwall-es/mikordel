@@ -10,12 +10,12 @@ type TileProps =
 
 function Tile(props: TileProps) {
   const base =
-    'aspect-square w-full rounded-lg border-2 grid place-items-center text-3xl font-bold uppercase select-none'
+    'aspect-square w-full rounded-lg border-2 grid place-items-center text-3xl font-bold uppercase select-none shadow-[0_0_0_1px_var(--component-edge)]'
 
   if (props.kind === 'empty') {
     return (
       <div
-        className={`${base} bg-tile ${props.active ? 'border-tile-active' : 'border-transparent'}`}
+        className={`${base} bg-tile ${props.active ? 'border-tile-active shadow-[0_0_0_2px_var(--active-ring)]' : 'border-transparent'}`}
         data-state={props.active ? 'active' : 'empty'}
       />
     )

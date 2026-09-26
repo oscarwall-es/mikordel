@@ -23,7 +23,7 @@ export function ModeTabs({ mode, onChange }: ModeTabsProps) {
             aria-selected={active}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onChange(tab.mode)}
-            className={`h-9 rounded-lg text-sm font-bold tracking-[0.03em] uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-icon ${
+            className={`h-9 rounded-lg shadow-[0_0_0_1px_var(--component-edge)] text-sm font-bold tracking-[0.03em] uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-icon ${
               active ? 'bg-action text-white' : 'bg-tile text-icon hover:text-text'
             }`}
           >

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Flödestest i en riktig webbläsare: första besöket, återställning efter omladdning, vinst,
- * blockerat omspel, statistik, flikbyte, övningsläge och gammalt sparat läge.
+ * blockerat omspel, statistik, flikbyte, övningsläge, gammalt sparat läge och bakgrundsfärg.
  *
  * Kör:  npm run test:e2e
  *
@@ -191,6 +191,33 @@ try {
   )
   await reload()
   check('Sparad omgång från en annan dag ignoreras → ny omgång', (await tiles()) === '' && (await openDialog()) === null)
+
+  // 6. Färgväljare och bakgrundsfärg
+  const bodyBg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+  const titleColor = () => page.evaluate(() => getComputedStyle(document.querySelector('h1')).color)
+  const TRANSITION_MS = 800 // bakgrunden tonar över på 600 ms
+  await sleep(TRANSITION_MS)
+  check('Standardbakgrund är Skiffer', (await bodyBg()) === 'rgb(30, 41, 59)', await bodyBg())
+  await page.click('button[aria-label=Bakgrundsfärg]')
+  await sleep(150)
+  check('Palettknappen öppnar färgväljaren', (await openDialog()) === 'Bakgrundsfärg')
+  await page.click('dialog[open] [role=radio][aria-label=Hav]')
+  await sleep(TRANSITION_MS)
+  check('Vald färg (Hav) blir bakgrund', (await bodyBg()) === 'rgb(12, 74, 110)', await bodyBg())
+  check(
+    'Vald färg markeras i väljaren',
+    await page.evaluate(() => document.querySelector('[role=radio][aria-label=Hav]')?.getAttribute('aria-checked') === 'true'),
+  )
+  check('Ljus titel på mörk färg', (await titleColor()) === 'rgb(241, 245, 249)', await titleColor())
+  await page.click('dialog[open] [role=radio][aria-label=Sand]')
+  await sleep(TRANSITION_MS)
+  check('Mörk titel på ljus färg (Sand)', (await titleColor()) === 'rgb(15, 23, 42)', await titleColor())
+  const savedColor = await page.evaluate(() => localStorage.getItem('ordel:background:v1'))
+  check('Färgen sparas i localStorage', savedColor === '#f5e6c8', savedColor)
+  await clickText('Klar')
+  await reload()
+  await sleep(TRANSITION_MS)
+  check('Färgen finns kvar efter omladdning', (await bodyBg()) === 'rgb(245, 230, 200)', await bodyBg())
 
   check('Inga fel i konsolen', errors.length === 0, errors.join(' | '))
 } catch (e) {

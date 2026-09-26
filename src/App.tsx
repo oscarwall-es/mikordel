@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
+import { ColorModal } from './components/ColorModal'
 import { GameView } from './components/GameView'
 import { Header } from './components/Header'
 import { HelpModal } from './components/HelpModal'
@@ -19,10 +20,11 @@ import {
   type GameResult,
 } from './logic/storage'
 import { ANSWERS, isValidWord } from './logic/words'
+import { useBackgroundColor } from './ui/useBackgroundColor'
 
 const gameReducer = createGameReducer(isValidWord)
 
-type ModalName = 'help' | 'stats' | 'result' | null
+type ModalName = 'help' | 'stats' | 'result' | 'colors' | null
 
 const isFinished = (g: GameState) => g.status === 'won' || g.status === 'lost'
 
@@ -56,6 +58,7 @@ export default function App() {
   const [practiceRound, setPracticeRound] = useState(0)
 
   const [mode, setMode] = useState<GameMode>('daily')
+  const [backgroundColor, setBackgroundColor] = useBackgroundColor()
   // Redan klart för i dag → visa resultatet direkt. Första besöket → visa hjälpen.
   const [modal, setModal] = useState<ModalName>(() =>
     isFinished(daily) ? 'result' : hasSeenHelp() ? null : 'help',
@@ -138,7 +141,7 @@ export default function App() {
 
   return (
     <div className="mx-auto flex h-dvh max-w-lg flex-col">
-      <Header onHelp={() => setModal('help')} onStats={() => setModal('stats')} />
+      <Header onHelp={() => setModal('help')} onStats={() => setModal('stats')} onColors={() => setModal('colors')} />
       <ModeTabs mode={mode} onChange={setMode} />
       <GameView
         // Ny instans per läge och övningsomgång, så animationstillståndet börjar om
@@ -151,6 +154,9 @@ export default function App() {
       />
       {/* Modalerna monteras bara när de är öppna, så statistiken läses färskt och nedräkningen inte tickar i onödan */}
       {modal === 'help' && <HelpModal open onClose={closeModal} />}
+      {modal === 'colors' && (
+        <ColorModal open onClose={closeModal} color={backgroundColor} onChange={setBackgroundColor} />
+      )}
       {modal === 'stats' && (
         <StatsModal
           open

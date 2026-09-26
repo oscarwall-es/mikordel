@@ -20,7 +20,7 @@ interface KeyboardProps {
 }
 
 const keyBase =
-  'h-12 rounded-md font-bold text-white uppercase select-none transition-colors active:brightness-125 disabled:cursor-default disabled:active:brightness-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-icon'
+  'h-12 rounded-md shadow-[0_0_0_1px_var(--component-edge)] font-bold text-white uppercase select-none transition-colors active:brightness-125 disabled:cursor-default disabled:active:brightness-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-icon'
 
 export function Keyboard({ keyStatuses, onLetter, onEnter, onBackspace, disabled }: KeyboardProps) {
   // Tangenterna ska inte ta fokus vid klick – då skulle fysisk Enter "klicka" på senast använda tangent.
