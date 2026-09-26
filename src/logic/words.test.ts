@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import answersExclude from '../../scripts/data/answers-exclude.json'
+import extraWords from '../../scripts/data/extra-words.json'
 import { ANSWERS, isValidWord } from './words'
 
 // Alla ordlistor i src/data, även kandidater som answers.new.json – så nya listor
@@ -49,5 +51,22 @@ describe('isValidWord', () => {
   it('är okänslig för versaler och avvisar okända ord', () => {
     expect(isValidWord('SKOLA')).toBe(true)
     expect(isValidWord('abcde')).toBe(false)
+  })
+})
+
+// Manuella beslut om svarslistan (se scripts/data/) – skyddar mot att en ombyggnad tappar dem.
+describe('beslut om ordlistorna', () => {
+  it('strukna funktionsord är inte svarsord men fortfarande giltiga gissningar', () => {
+    expect(answersExclude.filter((w) => ANSWERS.includes(w))).toEqual([])
+    expect(answersExclude.filter((w) => !isValidWord(w))).toEqual([])
+  })
+
+  it('ord som saknas i källfilen (spjut m.fl.) är både svarsord och giltiga gissningar', () => {
+    expect(extraWords.filter((w) => !ANSWERS.includes(w) || !isValidWord(w))).toEqual([])
+  })
+
+  it('ord med é är filtrerade (tangentbordet saknar é)', () => {
+    expect(isValidWord('moské')).toBe(false)
+    expect(ANSWERS.some((w) => w.includes('é'))).toBe(false)
   })
 })

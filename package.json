@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "words": "node scripts/build-wordlist.mjs",
     "answers": "node scripts/build-answers.mjs",
+    "wordlists": "node scripts/build-wordlist.mjs raw/swe_wordlist_raw.txt src/data/valid.json --include scripts/data/extra-words.json && node scripts/build-answers.mjs raw/kelly.xml src/data/valid.json raw/answers.candidates.json && node scripts/build-wordlist.mjs raw/answers.candidates.json src/data/answers.json --include scripts/data/extra-words.json --exclude scripts/data/answers-exclude.json --shuffle",
     "preview": "vite preview"
   },
   "dependencies": {

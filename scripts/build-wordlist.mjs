@@ -23,8 +23,11 @@
  *   6. fel längd
  * Allt normaliseras till NFC + gemener först; Å, Ä, Ö räknas som egna bokstäver.
  *
- * --include slår ihop ord från en eller flera befintliga JSON-listor, t.ex. så att
- * valid.json garanterat innehåller alla ord i answers.json.
+ * --include slår ihop ord från en eller flera befintliga JSON-listor, t.ex. ord som saknas i
+ * källfilen (scripts/data/extra-words.json).
+ *
+ * --exclude tar bort ord listade i en eller flera JSON-listor, efter --include. Används för
+ * manuellt strukna svarsord (scripts/data/answers-exclude.json).
  *
  * --shuffle blandar listan deterministiskt i stället för att lämna den alfabetisk. Används för
  * answers.json, eftersom dagens ord väljs som (dag % antal ord) – en alfabetisk lista skulle göra
@@ -74,22 +77,24 @@ export function seededShuffle(items, seed = SHUFFLE_SEED) {
 function parseArgs(argv) {
   const positional = []
   const include = []
+  const exclude = []
   let length = 5
   let shuffle = false
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--length') length = Number(argv[++i])
     else if (arg === '--include') include.push(argv[++i])
+    else if (arg === '--exclude') exclude.push(argv[++i])
     else if (arg === '--shuffle') shuffle = true
     else positional.push(arg)
   }
   if (positional.length !== 2 || !Number.isInteger(length) || length < 1) {
     console.error(
-      'Användning: node scripts/build-wordlist.mjs <indata> <utdata.json> [--length 5] [--include fil.json ...] [--shuffle]',
+      'Användning: node scripts/build-wordlist.mjs <indata> <utdata.json> [--length 5] [--include fil.json ...] [--exclude fil.json ...] [--shuffle]',
     )
     process.exit(1)
   }
-  return { input: positional[0], output: positional[1], length, include, shuffle }
+  return { input: positional[0], output: positional[1], length, include, exclude, shuffle }
 }
 
 export const REASONS = {
@@ -127,7 +132,7 @@ export function normalizeEntry(line, length) {
 }
 
 function main() {
-  const { input, output, length, include, shuffle } = parseArgs(process.argv.slice(2))
+  const { input, output, length, include, exclude, shuffle } = parseArgs(process.argv.slice(2))
   const words = new Set()
   const rejected = Object.fromEntries(Object.keys(REASONS).map((k) => [k, { total: 0, withLength: 0 }]))
   let accepted = 0
@@ -155,6 +160,14 @@ function main() {
     }
   }
 
+  let excluded = 0
+  for (const file of exclude) {
+    for (const w of JSON.parse(readFileSync(file, 'utf8'))) {
+      if (words.delete(w)) excluded++
+      else console.warn(`Varning: "${w}" i ${file} finns inte i listan och kan inte tas bort`)
+    }
+  }
+
   const sorted = [...words].sort(new Intl.Collator('sv').compare)
   const result = shuffle ? seededShuffle(sorted) : sorted
   writeFileSync(output, JSON.stringify(result, null, 2) + '\n')
@@ -167,7 +180,8 @@ function main() {
   console.log(`\n${pad(accepted)}  godkända rader`)
   if (accepted !== unique) console.log(`${pad(accepted - unique)}  dubbletter efter normalisering`)
   console.log(`${pad(unique)}  unika ${length}-bokstavsord`)
-  if (include.length) console.log(`${pad(sorted.length)}  efter --include ${include.join(', ')}`)
+  if (include.length) console.log(`${pad(sorted.length + excluded)}  efter --include ${include.join(', ')}`)
+  if (exclude.length) console.log(`${pad(sorted.length)}  efter --exclude ${exclude.join(', ')} (${excluded} borttagna)`)
   console.log(`\n→ ${output}${shuffle ? ` (blandad, seed ${SHUFFLE_SEED})` : ' (alfabetisk)'}`)
 }
 
