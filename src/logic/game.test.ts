@@ -16,7 +16,7 @@ const play = (answer: string, ...words: string[]) =>
 describe('statusövergångar', () => {
   it('börjar i idle utan gissningar', () => {
     const s = createGameState('daily', 'skola')
-    expect(s).toMatchObject({ status: 'idle', guesses: [], currentGuess: [], keyStatuses: {} })
+    expect(s).toMatchObject({ status: 'idle', guesses: [], currentGuess: [], keyStatuses: {}, error: null, errorCount: 0 })
   })
 
   it('idle → playing vid första bokstaven', () => {
@@ -85,12 +85,13 @@ describe('ogiltiga gissningar förbrukar inte ett försök', () => {
     expect(s.guesses).toHaveLength(6)
   })
 
-  it('lyckad gissning nollställer felet', () => {
-    const s = run(play('skola', 'abcde'), [
-      ...Array.from({ length: 5 }, (): GameAction => ({ type: 'removeLetter' })),
-      ...typeAndSubmit('stark'),
-    ])
-    expect(s.error).toBeNull()
+  it('lyckad gissning nollställer felet, men nästa fel får ändå ett nytt id', () => {
+    const clear = (): GameAction[] => Array.from({ length: 5 }, () => ({ type: 'removeLetter' }))
+    const first = play('skola', 'abcde')
+    const afterValid = run(first, [...clear(), ...typeAndSubmit('stark')])
+    expect(afterValid.error).toBeNull()
+    const second = run(afterValid, typeAndSubmit('abcde'))
+    expect(second.error!.id).toBeGreaterThan(first.error!.id)
   })
 })
 

@@ -25,8 +25,12 @@ export interface GameState {
   guesses: EvaluatedGuess[]
   /** Kumulativ tangentbordsstatus för den här omgången; grön slår lila slår svart. */
   keyStatuses: Partial<Record<string, LetterStatus>>
-  /** Senaste avvisade gissning. `id` ökar vid varje fel så UI:t kan trigga shake även vid samma fel två gånger i rad. */
+  /**
+   * Senaste avvisade gissning, null efter en giltig gissning. `id` ökar vid varje fel under hela omgången
+   * (aldrig återanvänt), så UI:t kan trigga shake även vid samma fel två gånger i rad.
+   */
   error: { kind: GameErrorKind; id: number } | null
+  errorCount: number
 }
 
 export type GameAction =
@@ -83,6 +87,7 @@ export function createGameState(
     guesses: [],
     keyStatuses: {},
     error: null,
+    errorCount: 0,
   }
   for (const word of previousGuesses) {
     if (state.status === 'won' || state.status === 'lost') break
@@ -116,14 +121,14 @@ export function createGameReducer(isValidWord: (word: string) => boolean) {
       }
 
       case 'submit': {
-        const nextErrorId = (state.error?.id ?? 0) + 1
-        if (state.currentGuess.length < WORD_LENGTH) {
-          return { ...state, error: { kind: 'too-short', id: nextErrorId } }
-        }
+        const reject = (kind: GameErrorKind): GameState => ({
+          ...state,
+          error: { kind, id: state.errorCount + 1 },
+          errorCount: state.errorCount + 1,
+        })
+        if (state.currentGuess.length < WORD_LENGTH) return reject('too-short')
         const word = state.currentGuess.join('')
-        if (!isValidWord(word)) {
-          return { ...state, error: { kind: 'invalid-word', id: nextErrorId } }
-        }
+        if (!isValidWord(word)) return reject('invalid-word')
         return applyGuess(state, word)
       }
     }

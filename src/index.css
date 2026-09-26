@@ -1,1 +1,78 @@
 @import "tailwindcss";
+
+/* Färger avlästa från skärmdumparna. */
+@theme {
+  --color-page: #20293a; /* spelbakgrund */
+  --color-surface: #101729; /* modaler */
+  --color-card: #20293a; /* kort i modaler */
+  --color-tile: #364154; /* tom/ifylld ruta */
+  --color-key: #4a5567; /* tangent */
+  --color-icon: #cdd5e0;
+  --color-action: #2d689d; /* SPELA, aktiv flik */
+  --color-correct: #4ca154; /* grön */
+  --color-present: #652dd1; /* lila */
+  --color-absent: #101729; /* svart */
+  --color-tile-active: #e2e8f0; /* ram på aktiv ruta */
+  --color-tile-filled: #718096; /* ram på ifylld, ej utvärderad ruta */
+
+  --animate-pop: pop 100ms ease-out;
+  --animate-shake: shake 500ms ease-in-out;
+  --animate-flip: flip 500ms ease-in-out both;
+
+  @keyframes pop {
+    50% {
+      transform: scale(1.1);
+    }
+  }
+
+  @keyframes shake {
+    10%,
+    90% {
+      transform: translateX(-2px);
+    }
+    20%,
+    80% {
+      transform: translateX(4px);
+    }
+    30%,
+    50%,
+    70% {
+      transform: translateX(-8px);
+    }
+    40%,
+    60% {
+      transform: translateX(8px);
+    }
+  }
+
+  /* Rutan vänds; färgen byts när den står på kant (50 %). --flip-color sätts per ruta. */
+  @keyframes flip {
+    0% {
+      transform: rotateX(0);
+      background-color: var(--color-tile);
+      border-color: var(--color-tile-filled);
+    }
+    49.99% {
+      background-color: var(--color-tile);
+      border-color: var(--color-tile-filled);
+    }
+    50% {
+      transform: rotateX(-90deg);
+      background-color: var(--flip-color);
+      border-color: transparent;
+    }
+    100% {
+      transform: rotateX(0);
+      background-color: var(--flip-color);
+      border-color: transparent;
+    }
+  }
+}
+
+html,
+body {
+  background-color: var(--color-page);
+  color: white;
+  /* Förhindrar dubbeltrycks-zoom på tangentbordet i mobilen */
+  touch-action: manipulation;
+}
