@@ -20,7 +20,11 @@ export const MIKA_DEFAULT_VOLUME = 0.7
  */
 export const MIKA_MUSIC_VOLUME = 0.55
 
-/** Idé #4: avbrottet (~10,2 s) som spelas en gång när man trycker på avbrottsknappen. */
+/**
+ * Idé #4: avbrottet (~9,8 s) som spelas en gång när man trycker på avbrottsknappen.
+ * Filens tysta svans är bortklippt (ljudet i övrigt orört), så att 'ended' – som styr när röst
+ * och musik kommer tillbaka – kommer i samma ögonblick som Mika slutar prata.
+ */
 export const MIKA_INTERRUPT_SRC = `${import.meta.env.BASE_URL}audio/mika-interrupt.mp3`
 
 /** Avbrottets volym (där volume fungerar – på iOS spelar det på full volym). */

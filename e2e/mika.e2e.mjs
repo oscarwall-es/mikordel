@@ -222,7 +222,7 @@ try {
   await sleep(300)
   const after = await page.evaluate(() => document.querySelector('[data-mika-audio="interrupt"]')?.currentTime)
   check('Under avbrottet: ett nytt klick gör ingenting (ingen omstart)', after > before, `${before.toFixed(2)} s → ${after?.toFixed(2)} s`)
-  // Vänta ut avbrottsspåret på riktigt (~10,2 s) – slutet styrs av dess 'ended'-händelse
+  // Vänta ut avbrottsspåret på riktigt (~9,8 s) – slutet styrs av dess 'ended'-händelse
   const endedAfter = await page.evaluate(
     () =>
       new Promise((resolve) => {
@@ -244,7 +244,8 @@ try {
     disabled: document.querySelector('[data-mika-interrupt]')?.disabled,
     label: document.querySelector('[data-mika-interrupt]')?.getAttribute('aria-label'),
   }))
-  check('Avbrottet tar slut när spåret är slut (~10,2 s)', endedAfter !== null && totalMs > 9500 && totalMs < 12500, `${(totalMs / 1000).toFixed(1)} s efter klicket`)
+  // Snävt fönster: spåret är ~9,8 s utan tyst svans, så röst och musik ska vara tillbaka direkt
+  check('Avbrottet tar slut när spåret är slut (~9,8 s, ingen tyst lucka)', endedAfter !== null && totalMs > 9500 && totalMs < 10500, `${(totalMs / 1000).toFixed(2)} s efter klicket`)
   check(
     'Efter avbrottet: röst och musik hörs igen automatiskt (70 % / 55 %)',
     back.voice?.muted === false && back.music?.muted === false && back.voice.volume === 0.7 && back.music.volume === 0.55 && back.voice.playing && back.music.playing,
