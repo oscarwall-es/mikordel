@@ -10,7 +10,7 @@ import { ResultModal } from './components/ResultModal'
 import { StatsModal } from './components/StatsModal'
 import { getDailyWord, getDayNumber, toDateKey } from './logic/daily'
 import { createGameReducer, createGameState, type GameAction, type GameMode, type GameState } from './logic/game'
-import { pickPracticeWord, pushRecent } from './logic/practice'
+import { pushRecent } from './logic/practice'
 import { buildShareText } from './logic/share'
 import {
   hasSeenHelp,
@@ -24,6 +24,7 @@ import {
 import { ANSWERS, isValidWord } from './logic/words'
 import { shouldCelebrate } from './ui/celebration'
 import { pickRandomColor, shouldAutoChangeColor } from './ui/colors'
+import { nextPracticeWord } from './practiceWords'
 import { useBackgroundColor } from './ui/useBackgroundColor'
 
 const gameReducer = createGameReducer(isValidWord)
@@ -53,11 +54,11 @@ export default function App() {
 
   const [daily, dispatchDaily] = useReducer(gameReducer, now, initDaily)
 
-  // Övningsläget: de senaste orden i sessionen (inte localStorage). Dagens ord räknas in
-  // från start så att man inte får det som övningsord samma dag.
-  const [recent, setRecent] = useState<string[]>(() => [daily.answer])
+  // Övningsläget: de senaste orden i sessionen (inte localStorage). Dagens ord är
+  // undantaget hela dagen via nextPracticeWord.
+  const [recent, setRecent] = useState<string[]>([])
   const [practice, dispatchPractice] = useReducer(gameReducer, undefined, () =>
-    createGameState('practice', pickPracticeWord(ANSWERS, [daily.answer])),
+    createGameState('practice', nextPracticeWord(ANSWERS, daily.answer, [])),
   )
   const [practiceRound, setPracticeRound] = useState(0)
 
@@ -122,7 +123,7 @@ export default function App() {
   const startNextPracticeWord = () => {
     // practice.answer kan saknas i recent om man aldrig spelat klart en omgång
     const seen = pushRecent(recent, practice.answer)
-    const word = pickPracticeWord(ANSWERS, seen)
+    const word = nextPracticeWord(ANSWERS, daily.answer, seen)
     setRecent(pushRecent(seen, word))
     dispatchPractice({ type: 'newGame', mode: 'practice', answer: word })
     setPracticeRound((r) => r + 1)
