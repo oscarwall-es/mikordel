@@ -1,0 +1,60 @@
+/*
+ * Stilar för Mika-mode-effekter. Alla selektorer är mika-specifika klasser, så inget här
+ * påverkar den vanliga appen – elementen finns bara i DOM:en när Mika-mode är på.
+ */
+
+/* Fasta lager BAKOM spelytan (negativt z-index): allt i appen ritas ovanpå, klick går igenom. */
+.mika-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.mika-disco {
+  z-index: -2;
+}
+
+.mika-rain {
+  z-index: -1;
+  overflow: hidden;
+}
+
+.mika-particle {
+  position: absolute;
+  top: 0;
+  display: block;
+  will-change: transform;
+  animation-name: mika-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
+}
+
+@keyframes mika-fall {
+  from {
+    transform: translate3d(0, -12vh, 0) rotate(0deg);
+  }
+  to {
+    transform: translate3d(var(--drift, 0px), 108vh, 0) rotate(var(--rotate, 0deg));
+  }
+}
+
+/* Reducerade animationer: inget faller – glesa symboler står still och tonar långsamt. */
+@media (prefers-reduced-motion: reduce) {
+  .mika-particle {
+    top: var(--top);
+    will-change: auto;
+    animation-name: mika-twinkle;
+    animation-timing-function: ease-in-out;
+  }
+}
+
+@keyframes mika-twinkle {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}

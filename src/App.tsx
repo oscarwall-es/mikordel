@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
 import { CelebrationOverlay } from './components/CelebrationOverlay'
 import { ColorModal } from './components/ColorModal'
+import { MikaEffects } from './mika/MikaEffects'
 import { MikaIndicator } from './mika/MikaIndicator'
 import { GameView } from './components/GameView'
 import { Header } from './components/Header'
@@ -194,6 +195,7 @@ export default function App() {
         />
       )}
       <MikaIndicator />
+      <MikaEffects />
       {/* Sist, så att popovern öppnas efter resultatdialogen och hamnar ovanför den */}
       {celebration > 0 && <CelebrationOverlay key={celebration} onDone={endCelebration} />}
     </div>

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Flödestest för Mika-mode-infrastrukturen: knappen i toppmenyn, indikatorn, att läget är av
- * vid start och efter omladdning, att inget sparas, och att spelet går att spela med läget på.
+ * Flödestest för Mika-mode: knappen i toppmenyn, indikatorn, att läget är av vid start och
+ * efter omladdning, att inget sparas, att spelet går att spela med läget på, samt diskoläget
+ * (blinkande bakgrund under 3 byten/s, regn, direkt borta vid av, dämpat vid reducerad rörelse).
  *
  * Kör:  npm run test:e2e              (startar egen dev-server)
  *       E2E_URL=https://oscarwall-es.github.io/mikordel/ node e2e/mika.e2e.mjs   (publicerad sida)
@@ -92,10 +93,53 @@ try {
   check('Klick slår på: knappen intryckt och indikatorn syns', s.pressed === 'true' && s.indicator, JSON.stringify(s))
   check('Indikatorn har etiketten "Mika-mode"', /mika-mode/i.test(s.label ?? ''), s.label)
 
+  // Diskoläget: mät färgbytena i webbläsaren med riktiga tidsstämplar
+  const disco = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const el = document.querySelector('[data-mika-disco]')
+        if (!el) return resolve(null)
+        const times = []
+        const obs = new MutationObserver(() => times.push(performance.now()))
+        obs.observe(el, { attributes: true, attributeFilter: ['data-mika-disco'] })
+        const before = getComputedStyle(el).backgroundColor
+        setTimeout(() => {
+          obs.disconnect()
+          resolve({
+            times,
+            before,
+            after: getComputedStyle(el).backgroundColor,
+            particles: document.querySelectorAll('[data-mika-particle]').length,
+            shapes: new Set([...document.querySelectorAll('[data-mika-particle]')].map((p) => p.dataset.mikaParticle)).size,
+          })
+        }, 3000)
+      }),
+  )
+  const gaps = disco ? disco.times.slice(1).map((t, i) => t - disco.times[i]) : []
+  check('Diskoläge: bakgrunden byter färg över tid', !!disco && disco.times.length >= 3 && disco.before !== disco.after, disco && `${disco.times.length} byten på 3 s, ${disco.before} → ${disco.after}`)
+  check(
+    'Diskoläge: aldrig mer än 3 byten/s (minst 330 ms mellan byten)',
+    gaps.length > 0 && Math.min(...gaps) >= 330,
+    `kortaste mellanrum ${Math.round(Math.min(...gaps))} ms`,
+  )
+  check('Diskoläge: regn av partiklar i flera former syns', !!disco && disco.particles > 0 && disco.shapes >= 5, disco && `${disco.particles} partiklar, ${disco.shapes} former`)
+  const underneath = await page.evaluate(() => {
+    // Mitt i en tangent: översta elementet ska vara tangenten, inte regnet eller diskolagret
+    const key = document.querySelector('button[aria-label="Q"]').getBoundingClientRect()
+    const top = document.elementFromPoint(key.left + key.width / 2, key.top + key.height / 2)
+    return top?.closest('button')?.getAttribute('aria-label') ?? top?.className
+  })
+  check('Diskoläge: tangenterna ligger överst (regnet är bakom spelytan)', underneath === 'Q', underneath)
+
   await type([...'glass', 'Enter'])
   await sleep(2100)
   const tiles = await page.evaluate(() => [...document.querySelectorAll('[role=row]')][0].textContent)
   check('Spelet går att spela med läget på (indikatorn blockerar inte)', tiles.toLowerCase() === 'glass', tiles)
+  await page.click('button[aria-label="M"]')
+  await page.click('button[aria-label="J"]')
+  await sleep(100)
+  const clicked = await page.evaluate(() => [...document.querySelectorAll('[role=row]')][1].textContent)
+  check('Skärmtangenterna går att klicka under diskoläget', clicked.toLowerCase() === 'mj', clicked)
 
   await page.click('button[aria-label="Så spelar du"]')
   await sleep(150)
@@ -104,9 +148,21 @@ try {
   await page.keyboard.press('Escape')
   await sleep(100)
 
+  const userBg = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)
   await toggle()
   s = await state()
   check('Nytt klick slår av: indikatorn försvinner', s.pressed === 'false' && !s.indicator, JSON.stringify(s))
+  const off = await page.evaluate(() => ({
+    disco: !!document.querySelector('[data-mika-disco]'),
+    particles: document.querySelectorAll('[data-mika-particle]').length,
+    bodyStyle: document.body.getAttribute('style') ?? '',
+    bodyBg: getComputedStyle(document.body).backgroundColor,
+  }))
+  check(
+    'Av: diskolager, regn och bakgrundsändringar försvinner direkt (ingen kvardröjande övertoning)',
+    !off.disco && off.particles === 0 && off.bodyStyle === '' && off.bodyBg === userBg,
+    JSON.stringify({ ...off, userBg }),
+  )
 
   await toggle()
   await page.reload({ waitUntil: 'networkidle0' })
@@ -139,6 +195,40 @@ try {
   await toggle()
   s = await state()
   check('320 px: knappen slår på läget', s.pressed === 'true' && s.indicator)
+
+  // prefers-reduced-motion: inget blink, glest och stilla regn
+  const reducedPage = await context.newPage()
+  await reducedPage.setViewport({ width: 399, height: 676, deviceScaleFactor: 2 })
+  await reducedPage.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }])
+  reducedPage.on('pageerror', (e) => errors.push(e.message))
+  await reducedPage.goto(url, { waitUntil: 'networkidle0' })
+  await reducedPage.evaluate(() =>
+    [...document.querySelectorAll('button[aria-label="Mika-mode"]')].find((b) => b.getClientRects().length > 0).click(),
+  )
+  const reduced = await reducedPage.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const el = document.querySelector('[data-mika-disco]')
+        let changes = 0
+        const obs = new MutationObserver(() => changes++)
+        obs.observe(el, { attributes: true, attributeFilter: ['data-mika-disco'] })
+        setTimeout(() => {
+          obs.disconnect()
+          const particle = document.querySelector('[data-mika-particle]')
+          resolve({
+            changes,
+            particles: document.querySelectorAll('[data-mika-particle]').length,
+            animation: particle ? getComputedStyle(particle).animationName : null,
+          })
+        }, 2500)
+      }),
+  )
+  check(
+    'Reducerad rörelse: ingen blinkning, färre partiklar som inte faller',
+    reduced.changes === 0 && reduced.particles > 0 && reduced.particles <= 12 && reduced.animation === 'mika-twinkle',
+    JSON.stringify(reduced),
+  )
+  await reducedPage.close()
 
   check('Inga fel i konsolen', errors.length === 0, errors.join(' | '))
 } catch (e) {
