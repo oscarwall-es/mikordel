@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Flödestest för Mika-mode: knappen i toppmenyn, indikatorn, att läget är av vid start och
- * efter omladdning, att inget sparas, att spelet går att spela med läget på, samt diskoläget
- * (blinkande bakgrund under 3 byten/s, regn, direkt borta vid av, dämpat vid reducerad rörelse).
+ * efter omladdning, att inget sparas, att spelet går att spela med läget på, diskoläget
+ * (blinkande bakgrund under 3 byten/s, regn, direkt borta vid av, dämpat vid reducerad rörelse)
+ * och Mikas röst (spelas i loop och hörs, mute ger volym 0, stoppas direkt vid av).
  *
  * Kör:  npm run test:e2e              (startar egen dev-server)
  *       E2E_URL=https://oscarwall-es.github.io/mikordel/ node e2e/mika.e2e.mjs   (publicerad sida)
@@ -93,6 +94,75 @@ try {
   check('Klick slår på: knappen intryckt och indikatorn syns', s.pressed === 'true' && s.indicator, JSON.stringify(s))
   check('Indikatorn har etiketten "Mika-mode"', /mika-mode/i.test(s.label ?? ''), s.label)
 
+  // Mikas röst: spelas upp i loop, och det är faktiskt ljud (inte tystnad) som kommer ut
+  const voice = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const audio = document.querySelector('[data-mika-audio]')
+        if (!audio) return resolve(null)
+        setTimeout(async () => {
+          const info = {
+            src: audio.currentSrc,
+            paused: audio.paused,
+            loop: audio.loop,
+            volume: audio.volume,
+            duration: Math.round(audio.duration * 100) / 100,
+            currentTime: audio.currentTime,
+            error: audio.error?.code ?? null,
+          }
+          // Mät signalnivån: koppla elementet via en analysator (ljudet går fortfarande ut)
+          try {
+            const ctx = new AudioContext()
+            await ctx.resume()
+            const source = ctx.createMediaElementSource(audio)
+            const analyser = ctx.createAnalyser()
+            analyser.fftSize = 2048
+            source.connect(analyser)
+            analyser.connect(ctx.destination)
+            const data = new Float32Array(analyser.fftSize)
+            let peak = 0
+            const until = performance.now() + 1500
+            while (performance.now() < until) {
+              await new Promise((r) => setTimeout(r, 50))
+              analyser.getFloatTimeDomainData(data)
+              for (const v of data) peak = Math.max(peak, Math.abs(v))
+            }
+            info.peak = Math.round(peak * 1000) / 1000
+          } catch (e) {
+            info.peak = null
+            info.analyserError = String(e)
+          }
+          resolve(info)
+        }, 800)
+      }),
+  )
+  check(
+    'Mikas röst: ljudelementet finns och spelar (loop, 70 % volym)',
+    !!voice && !voice.paused && voice.loop && voice.volume === 0.7 && voice.currentTime > 0 && voice.error === null,
+    JSON.stringify(voice),
+  )
+  check('Mikas röst: filen har laddats (cirka 5,6 s lång)', !!voice && voice.duration > 5 && voice.duration < 6.5, voice && `${voice.duration} s från ${voice.src}`)
+  check('Mikas röst: det hörs något (signalnivå över tystnad)', !!voice && voice.peak > 0.01, voice && `topp ${voice.peak}`)
+  await page.click('[data-mika-indicator] [data-mika-mute]')
+  await sleep(100)
+  const muted = await page.evaluate(() => {
+    const a = document.querySelector('[data-mika-audio]')
+    return { volume: a?.volume, pressed: document.querySelector('[data-mika-mute]')?.getAttribute('aria-pressed') }
+  })
+  check('Mute-knappen sätter volymen till 0', muted.volume === 0 && muted.pressed === 'true', JSON.stringify(muted))
+  await page.click('[data-mika-indicator] [data-mika-mute]')
+  await sleep(100)
+  check('Mute-knappen igen: volymen tillbaka på 70 %', (await page.evaluate(() => document.querySelector('[data-mika-audio]')?.volume)) === 0.7)
+  await page.click('[role=tab]:nth-child(2)')
+  await sleep(300)
+  const afterTab = await page.evaluate(() => {
+    const a = document.querySelector('[data-mika-audio]')
+    return { exists: !!a, paused: a?.paused }
+  })
+  check('Ljudet spelar vidare oförändrat vid flikbyte (kopplat bara till Mika-mode)', afterTab.exists && afterTab.paused === false, JSON.stringify(afterTab))
+  await page.click('[role=tab]:nth-child(1)')
+  await sleep(100)
+
   // Diskoläget: mät färgbytena i webbläsaren med riktiga tidsstämplar
   const disco = await page.evaluate(
     () =>
@@ -149,7 +219,17 @@ try {
   await sleep(100)
 
   const userBg = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)
+  // Behåll en referens till ljudelementet, för att se att det verkligen stoppas (inte bara tas bort)
+  await page.evaluate(() => {
+    window.__mikaAudio = document.querySelector('[data-mika-audio]')
+  })
   await toggle()
+  const stopped = await page.evaluate(() => ({
+    inDom: !!document.querySelector('[data-mika-audio]'),
+    paused: window.__mikaAudio?.paused,
+    currentTime: window.__mikaAudio?.currentTime,
+  }))
+  check('Av: rösten stoppas omedelbart', !stopped.inDom && stopped.paused === true && stopped.currentTime === 0, JSON.stringify(stopped))
   s = await state()
   check('Nytt klick slår av: indikatorn försvinner', s.pressed === 'false' && !s.indicator, JSON.stringify(s))
   const off = await page.evaluate(() => ({

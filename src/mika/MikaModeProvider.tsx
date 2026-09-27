@@ -7,7 +7,16 @@ import { MIKA_MODE_DEFAULT, MikaModeContext } from './mikaMode'
  */
 export function MikaModeProvider({ children }: { children: ReactNode }) {
   const [mikaMode, setMikaMode] = useState(MIKA_MODE_DEFAULT)
-  const toggleMikaMode = useCallback(() => setMikaMode((on) => !on), [])
-  const value = useMemo(() => ({ mikaMode, toggleMikaMode }), [mikaMode, toggleMikaMode])
+  const [audioMuted, setAudioMuted] = useState(false)
+  const toggleMikaMode = useCallback(() => {
+    setMikaMode((on) => !on)
+    // Varje gång läget slås på börjar det med ljud på
+    setAudioMuted(false)
+  }, [])
+  const toggleAudioMuted = useCallback(() => setAudioMuted((muted) => !muted), [])
+  const value = useMemo(
+    () => ({ mikaMode, toggleMikaMode, audioMuted, toggleAudioMuted }),
+    [mikaMode, toggleMikaMode, audioMuted, toggleAudioMuted],
+  )
   return <MikaModeContext.Provider value={value}>{children}</MikaModeContext.Provider>
 }

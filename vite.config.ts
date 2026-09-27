@@ -14,5 +14,6 @@ export default defineConfig(({ command, isPreview }) => ({
   plugins: [react(), tailwindcss()],
   test: {
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.mjs'],
+    setupFiles: ['src/test/setup.ts'],
   },
 }))
