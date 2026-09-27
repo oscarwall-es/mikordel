@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MIKA_AUDIO_SRC, MIKA_DEFAULT_VOLUME } from './audio'
+import { MIKA_AUDIO_SRC, MIKA_DEFAULT_VOLUME, MIKA_MUSIC_SRC, MIKA_MUSIC_VOLUME } from './audio'
 import { MikaEffects } from './MikaEffects'
 import { MikaIndicator } from './MikaIndicator'
 import { MikaModeProvider } from './MikaModeProvider'
@@ -30,10 +30,14 @@ const render = (withEffects = true) =>
     ),
   )
 const toggle = () => act(() => (container.querySelector('[data-toggle]') as HTMLElement).click())
-// Spelaren lägger sitt <audio>-element direkt i <body> medan rösten spelar
-const audio = () => document.querySelector<HTMLAudioElement>('[data-mika-audio]')
+// Spelaren lägger sina <audio>-element direkt i <body> medan ljudet spelar
+const voice = () => document.querySelector<HTMLAudioElement>('[data-mika-audio="voice"]')
+const music = () => document.querySelector<HTMLAudioElement>('[data-mika-audio="music"]')
+const both = () => [voice()!, music()!]
 const muteButton = () => container.querySelector<HTMLButtonElement>('[data-mika-mute]')
 const clickMute = () => act(() => muteButton()!.click())
+/** Vilka element play() anropats på. */
+const playedTracks = () => play.mock.contexts.map((el: unknown) => (el as HTMLElement).getAttribute('data-mika-audio'))
 
 beforeEach(() => {
   play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
@@ -52,57 +56,67 @@ afterEach(() => {
 describe('Mika-ljudet när Mika-mode är av', () => {
   it('varken spelas eller renderas', () => {
     render()
-    expect(audio()).toBeNull()
+    expect(voice()).toBeNull()
+    expect(music()).toBeNull()
     expect(muteButton()).toBeNull()
     expect(play).not.toHaveBeenCalled()
   })
 })
 
 describe('Mika-ljudet när Mika-mode slås på', () => {
-  it('startar uppspelning av rösten i loop på 70 % volym, inte mutad', () => {
+  it('startar både röst och musik, båda i loop, med musiken lägre än rösten', () => {
     render()
     toggle()
-    expect(audio()).not.toBeNull()
-    expect(audio()!.getAttribute('src')).toBe(MIKA_AUDIO_SRC)
-    expect(MIKA_AUDIO_SRC).toMatch(/audio\/mika-voice\.mp3$/)
-    expect(audio()!.loop).toBe(true)
-    expect(audio()!.muted).toBe(false)
-    expect(audio()!.volume).toBe(MIKA_DEFAULT_VOLUME)
-    expect(MIKA_DEFAULT_VOLUME).toBeLessThan(1)
-    expect(play).toHaveBeenCalledTimes(1)
+    expect(voice()!.getAttribute('src')).toBe(MIKA_AUDIO_SRC)
+    expect(music()!.getAttribute('src')).toBe(MIKA_MUSIC_SRC)
+    expect(MIKA_MUSIC_SRC).toMatch(/audio\/mika-music\.mp3$/)
+    for (const el of both()) {
+      expect(el.loop).toBe(true)
+      expect(el.muted).toBe(false)
+    }
+    expect(voice()!.volume).toBe(MIKA_DEFAULT_VOLUME)
+    expect(music()!.volume).toBe(MIKA_MUSIC_VOLUME)
+    expect(MIKA_MUSIC_VOLUME).toBeGreaterThanOrEqual(0.5)
+    expect(MIKA_MUSIC_VOLUME).toBeLessThan(MIKA_DEFAULT_VOLUME)
+    expect(playedTracks().sort()).toEqual(['music', 'voice'])
   })
 
-  it('startar direkt i klickhanteraren (krav i iOS Safari), inte först i en effekt', () => {
+  it('startar båda spåren direkt i klickhanteraren (krav i iOS Safari), inte först i en effekt', () => {
     // Utan MikaEffects finns ingen effekt som kan starta ljudet – bara själva klicket
     render(false)
     toggle()
-    expect(play).toHaveBeenCalledTimes(1)
+    expect(playedTracks().sort()).toEqual(['music', 'voice'])
   })
 
-  it('stoppas omedelbart när läget slås av', () => {
+  it('stoppar båda spåren omedelbart när läget slås av', () => {
     render()
     toggle()
-    const element = audio()!
+    const [v, m] = both()
     toggle()
-    expect(pause).toHaveBeenCalled()
-    expect(element.currentTime).toBe(0)
-    expect(audio()).toBeNull()
+    expect(pause.mock.contexts).toEqual(expect.arrayContaining([v, m]))
+    expect(v.currentTime).toBe(0)
+    expect(m.currentTime).toBe(0)
+    expect(voice()).toBeNull()
+    expect(music()).toBeNull()
   })
 
-  it('mute-knappen mutar med muted (och volym 0) och slår på igen', () => {
+  it('mute-knappen mutar båda spåren samtidigt med muted (och volym 0), och slår på igen', () => {
     render()
     toggle()
     expect(muteButton()!.getAttribute('aria-pressed')).toBe('false')
     clickMute()
-    expect(audio()!.muted).toBe(true)
-    expect(audio()!.volume).toBe(0)
+    for (const el of both()) {
+      expect(el.muted).toBe(true)
+      expect(el.volume).toBe(0)
+    }
     expect(muteButton()!.getAttribute('aria-pressed')).toBe('true')
     clickMute()
-    expect(audio()!.muted).toBe(false)
-    expect(audio()!.volume).toBe(MIKA_DEFAULT_VOLUME)
+    for (const el of both()) expect(el.muted).toBe(false)
+    expect(voice()!.volume).toBe(MIKA_DEFAULT_VOLUME)
+    expect(music()!.volume).toBe(MIKA_MUSIC_VOLUME)
   })
 
-  it('iOS Safari: mute fungerar fast volume inte går att ändra från JavaScript', () => {
+  it('iOS Safari: mute fungerar på båda spåren fast volume inte går att ändra från JavaScript', () => {
     // Som på iOS: volume är alltid 1 och tilldelningar ignoreras
     const volume = vi.spyOn(HTMLMediaElement.prototype, 'volume', 'set').mockImplementation(() => {})
     vi.spyOn(HTMLMediaElement.prototype, 'volume', 'get').mockReturnValue(1)
@@ -110,21 +124,21 @@ describe('Mika-ljudet när Mika-mode slås på', () => {
     toggle()
     clickMute()
     expect(volume).toHaveBeenCalled() // försöket görs, men…
-    expect(audio()!.volume).toBe(1) // …ignoreras, precis som på iPhone
-    expect(audio()!.muted).toBe(true) // och ljudet är ändå avstängt
+    for (const el of both()) {
+      expect(el.volume).toBe(1) // …ignoreras, precis som på iPhone
+      expect(el.muted).toBe(true) // och båda spåren är ändå tysta
+    }
     clickMute()
-    expect(audio()!.muted).toBe(false)
+    for (const el of both()) expect(el.muted).toBe(false)
   })
 
-  it('mute nollställs till "ljud på" nästa gång läget slås på', () => {
+  it('mute nollställs till "ljud på" för båda spåren nästa gång läget slås på', () => {
     render()
     toggle()
     clickMute()
-    expect(audio()!.muted).toBe(true)
     toggle() // av
     toggle() // på igen
-    expect(audio()!.muted).toBe(false)
-    expect(audio()!.volume).toBe(MIKA_DEFAULT_VOLUME)
+    for (const el of both()) expect(el.muted).toBe(false)
     expect(muteButton()!.getAttribute('aria-pressed')).toBe('false')
   })
 
@@ -134,8 +148,23 @@ describe('Mika-ljudet när Mika-mode slås på', () => {
     render()
     toggle()
     await act(async () => {})
-    expect(warn).toHaveBeenCalledWith('Mika-mode: kunde inte spela upp ljudet', expect.any(DOMException))
-    expect(audio()).not.toBeNull()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('kunde inte spela upp ljudet'), expect.any(DOMException))
+    expect(voice()).not.toBeNull()
+  })
+
+  it('om bara ett spår nekas spelar det andra vidare', async () => {
+    play.mockImplementation(function (this: HTMLMediaElement) {
+      return this.getAttribute('data-mika-audio') === 'music'
+        ? Promise.reject(new DOMException('Nekad', 'NotAllowedError'))
+        : Promise.resolve()
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    render()
+    toggle()
+    await act(async () => {})
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toContain('music')
+    expect(voice()).not.toBeNull()
   })
 
   it('kraschar inte i webbläsare där play() inte returnerar något eller kastar', () => {
@@ -151,20 +180,21 @@ describe('Mika-ljudet när Mika-mode slås på', () => {
     expect(warn).toHaveBeenCalled()
   })
 
-  it('startar bara en gång, även när mute ändras', () => {
+  it('startar varje spår bara en gång, även när mute ändras', () => {
     render()
     toggle()
     clickMute()
     clickMute()
-    expect(play).toHaveBeenCalledTimes(1)
+    expect(playedTracks().sort()).toEqual(['music', 'voice'])
   })
 
-  it('samma ljudelement återanvänds mellan på/av (iOS låser upp elementet vid första gesten)', () => {
+  it('samma ljudelement återanvänds mellan på/av (iOS låser upp elementen vid första gesten)', () => {
     render()
     toggle()
-    const first = audio()
+    const [v, m] = both()
     toggle()
     toggle()
-    expect(audio()).toBe(first)
+    expect(voice()).toBe(v)
+    expect(music()).toBe(m)
   })
 })

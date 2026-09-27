@@ -3,7 +3,8 @@
  * Flödestest för Mika-mode: knappen i toppmenyn, indikatorn, att läget är av vid start och
  * efter omladdning, att inget sparas, att spelet går att spela med läget på, diskoläget
  * (blinkande bakgrund under 3 byten/s, regn, direkt borta vid av, dämpat vid reducerad rörelse)
- * och Mikas röst (spelas i loop och hörs, mute ger volym 0, stoppas direkt vid av).
+ * samt Mikas röst och bakgrundsmusik (båda i loop samtidigt och hörs, mute tystar båda via
+ * muted – även när volume inte går att ändra som på iOS – och båda stoppas direkt vid av).
  *
  * Kör:  npm run test:e2e              (startar egen dev-server)
  *       E2E_URL=https://oscarwall-es.github.io/mikordel/ node e2e/mika.e2e.mjs   (publicerad sida)
@@ -94,81 +95,99 @@ try {
   check('Klick slår på: knappen intryckt och indikatorn syns', s.pressed === 'true' && s.indicator, JSON.stringify(s))
   check('Indikatorn har etiketten "Mika-mode"', /mika-mode/i.test(s.label ?? ''), s.label)
 
-  // Mikas röst: spelas upp i loop, och det är faktiskt ljud (inte tystnad) som kommer ut
-  const voice = await page.evaluate(
+  // Mikas röst och musiken: båda spelar i loop samtidigt, och båda ger faktiskt ljud (inte tystnad)
+  const tracks = await page.evaluate(
     () =>
       new Promise((resolve) => {
-        const audio = document.querySelector('[data-mika-audio]')
-        if (!audio) return resolve(null)
+        const elements = [...document.querySelectorAll('[data-mika-audio]')]
         setTimeout(async () => {
-          const info = {
-            src: audio.currentSrc,
-            paused: audio.paused,
-            loop: audio.loop,
-            muted: audio.muted,
-            volume: audio.volume,
-            duration: Math.round(audio.duration * 100) / 100,
-            currentTime: audio.currentTime,
-            error: audio.error?.code ?? null,
-          }
-          // Mät signalnivån: koppla elementet via en analysator (ljudet går fortfarande ut)
+          const info = Object.fromEntries(
+            elements.map((a) => [
+              a.dataset.mikaAudio,
+              {
+                src: a.currentSrc.split('/').pop(),
+                paused: a.paused,
+                loop: a.loop,
+                muted: a.muted,
+                volume: a.volume,
+                duration: Math.round(a.duration * 100) / 100,
+                currentTime: Math.round(a.currentTime * 100) / 100,
+                error: a.error?.code ?? null,
+              },
+            ]),
+          )
+          // Mät signalnivån per spår: varje element får en egen analysator (ljudet går fortfarande ut)
           try {
             const ctx = new AudioContext()
             await ctx.resume()
-            const source = ctx.createMediaElementSource(audio)
-            const analyser = ctx.createAnalyser()
-            analyser.fftSize = 2048
-            source.connect(analyser)
-            analyser.connect(ctx.destination)
-            const data = new Float32Array(analyser.fftSize)
-            let peak = 0
+            const analysers = elements.map((a) => {
+              const source = ctx.createMediaElementSource(a)
+              const analyser = ctx.createAnalyser()
+              analyser.fftSize = 2048
+              source.connect(analyser)
+              analyser.connect(ctx.destination)
+              return [a.dataset.mikaAudio, analyser]
+            })
+            const data = new Float32Array(2048)
+            const peaks = Object.fromEntries(analysers.map(([id]) => [id, 0]))
             const until = performance.now() + 1500
             while (performance.now() < until) {
               await new Promise((r) => setTimeout(r, 50))
-              analyser.getFloatTimeDomainData(data)
-              for (const v of data) peak = Math.max(peak, Math.abs(v))
+              for (const [id, analyser] of analysers) {
+                analyser.getFloatTimeDomainData(data)
+                for (const v of data) peaks[id] = Math.max(peaks[id], Math.abs(v))
+              }
             }
-            info.peak = Math.round(peak * 1000) / 1000
+            for (const [id, peak] of Object.entries(peaks)) info[id].peak = Math.round(peak * 1000) / 1000
           } catch (e) {
-            info.peak = null
             info.analyserError = String(e)
           }
           resolve(info)
         }, 800)
       }),
   )
+  const { voice, music } = tracks
+  const playing = (t, volume) => !!t && !t.paused && t.loop && !t.muted && t.volume === volume && t.currentTime > 0 && t.error === null
+  check('Rösten: spelar i loop på 70 % volym', playing(voice, 0.7), JSON.stringify(voice))
+  check('Musiken: spelar i loop på 55 % volym, samtidigt som rösten', playing(music, 0.55) && playing(voice, 0.7), JSON.stringify(music))
+  check('Rösten: filen har laddats (cirka 5,6 s)', !!voice && voice.duration > 5 && voice.duration < 6.5, voice && `${voice.duration} s, ${voice.src}`)
+  check('Musiken: filen har laddats (cirka 8 s)', !!music && music.duration > 7.5 && music.duration < 8.5, music && `${music.duration} s, ${music.src}`)
+  check('Rösten: det hörs något (signalnivå över tystnad)', !!voice && voice.peak > 0.01, voice && `topp ${voice.peak}`)
+  check('Musiken: det hörs något (signalnivå över tystnad)', !!music && music.peak > 0.01, music && `topp ${music.peak}`)
+
+  const audioState = () =>
+    page.evaluate(() =>
+      Object.fromEntries(
+        [...document.querySelectorAll('[data-mika-audio]')].map((a) => [
+          a.dataset.mikaAudio,
+          { muted: a.muted, volume: a.volume, playing: !a.paused },
+        ]),
+      ),
+    )
+  await page.click('[data-mika-indicator] [data-mika-mute]')
+  await sleep(100)
+  const muted = await audioState()
   check(
-    'Mikas röst: ljudelementet finns och spelar (loop, 70 % volym)',
-    !!voice && !voice.paused && voice.loop && !voice.muted && voice.volume === 0.7 && voice.currentTime > 0 && voice.error === null,
-    JSON.stringify(voice),
+    'Mute-knappen mutar båda spåren (muted = true, volym 0)',
+    muted.voice?.muted === true && muted.music?.muted === true && muted.voice.volume === 0 && muted.music.volume === 0,
+    JSON.stringify(muted),
   )
-  check('Mikas röst: filen har laddats (cirka 5,6 s lång)', !!voice && voice.duration > 5 && voice.duration < 6.5, voice && `${voice.duration} s från ${voice.src}`)
-  check('Mikas röst: det hörs något (signalnivå över tystnad)', !!voice && voice.peak > 0.01, voice && `topp ${voice.peak}`)
   await page.click('[data-mika-indicator] [data-mika-mute]')
   await sleep(100)
-  const muted = await page.evaluate(() => {
-    const a = document.querySelector('[data-mika-audio]')
-    return {
-      muted: a?.muted,
-      volume: a?.volume,
-      pressed: document.querySelector('[data-mika-mute]')?.getAttribute('aria-pressed'),
-    }
-  })
-  check('Mute-knappen mutar (muted = true, volym 0)', muted.muted === true && muted.volume === 0 && muted.pressed === 'true', JSON.stringify(muted))
-  await page.click('[data-mika-indicator] [data-mika-mute]')
-  await sleep(100)
-  const unmuted = await page.evaluate(() => {
-    const a = document.querySelector('[data-mika-audio]')
-    return { muted: a?.muted, volume: a?.volume }
-  })
-  check('Mute-knappen igen: ljud på (muted = false, volym 70 %)', unmuted.muted === false && unmuted.volume === 0.7, JSON.stringify(unmuted))
+  const unmuted = await audioState()
+  check(
+    'Mute-knappen igen: båda spåren på (röst 70 %, musik 55 %)',
+    unmuted.voice?.muted === false && unmuted.music?.muted === false && unmuted.voice.volume === 0.7 && unmuted.music.volume === 0.55,
+    JSON.stringify(unmuted),
+  )
   await page.click('[role=tab]:nth-child(2)')
   await sleep(300)
-  const afterTab = await page.evaluate(() => {
-    const a = document.querySelector('[data-mika-audio]')
-    return { exists: !!a, paused: a?.paused }
-  })
-  check('Ljudet spelar vidare oförändrat vid flikbyte (kopplat bara till Mika-mode)', afterTab.exists && afterTab.paused === false, JSON.stringify(afterTab))
+  const afterTab = await audioState()
+  check(
+    'Ljudet spelar vidare oförändrat vid flikbyte (kopplat bara till Mika-mode)',
+    afterTab.voice?.playing === true && afterTab.music?.playing === true,
+    JSON.stringify(afterTab),
+  )
   await page.click('[role=tab]:nth-child(1)')
   await sleep(100)
 
@@ -228,17 +247,20 @@ try {
   await sleep(100)
 
   const userBg = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)
-  // Behåll en referens till ljudelementet, för att se att det verkligen stoppas (inte bara tas bort)
+  // Behåll referenser till ljudelementen, för att se att de verkligen stoppas (inte bara tas bort)
   await page.evaluate(() => {
-    window.__mikaAudio = document.querySelector('[data-mika-audio]')
+    window.__mikaAudio = [...document.querySelectorAll('[data-mika-audio]')]
   })
   await toggle()
   const stopped = await page.evaluate(() => ({
-    inDom: !!document.querySelector('[data-mika-audio]'),
-    paused: window.__mikaAudio?.paused,
-    currentTime: window.__mikaAudio?.currentTime,
+    inDom: document.querySelectorAll('[data-mika-audio]').length,
+    tracks: window.__mikaAudio.map((a) => ({ id: a.dataset.mikaAudio, paused: a.paused, currentTime: a.currentTime })),
   }))
-  check('Av: rösten stoppas omedelbart', !stopped.inDom && stopped.paused === true && stopped.currentTime === 0, JSON.stringify(stopped))
+  check(
+    'Av: både röst och musik stoppas omedelbart',
+    stopped.inDom === 0 && stopped.tracks.length === 2 && stopped.tracks.every((t) => t.paused && t.currentTime === 0),
+    JSON.stringify(stopped),
+  )
   s = await state()
   check('Nytt klick slår av: indikatorn försvinner', s.pressed === 'false' && !s.indicator, JSON.stringify(s))
   const off = await page.evaluate(() => ({
@@ -296,6 +318,7 @@ try {
     const originalPlay = HTMLMediaElement.prototype.play
     HTMLMediaElement.prototype.play = function () {
       window.__playDuringClick = window.event?.type === 'click'
+      if (window.__playDuringClick) window.__playsDuringClick = (window.__playsDuringClick ?? 0) + 1
       return originalPlay.call(this)
     }
   })
@@ -307,19 +330,27 @@ try {
   ).click()
   await sleep(600)
   const iosStart = await iosPage.evaluate(() => {
-    const a = document.querySelector('[data-mika-audio]')
-    return { playing: !!a && !a.paused, playDuringClick: window.__playDuringClick === true }
-  })
-  check('iOS-simulering: rösten startar direkt i klicket (samma gest)', iosStart.playing && iosStart.playDuringClick, JSON.stringify(iosStart))
-  await iosPage.click('[data-mika-indicator] [data-mika-mute]')
-  await sleep(100)
-  const iosMuted = await iosPage.evaluate(() => {
-    const a = document.querySelector('[data-mika-audio]')
-    return { muted: a?.muted, volume: a?.volume, playing: !!a && !a.paused }
+    const els = [...document.querySelectorAll('[data-mika-audio]')]
+    return {
+      tracks: els.map((a) => a.dataset.mikaAudio).sort().join(','),
+      playing: els.length === 2 && els.every((a) => !a.paused),
+      playDuringClick: window.__playDuringClick === true,
+      playsDuringClick: window.__playsDuringClick ?? 0,
+    }
   })
   check(
-    'iOS-simulering: mute fungerar fast volymen inte går att ändra (muted = true)',
-    iosMuted.muted === true && iosMuted.volume === 1,
+    'iOS-simulering: röst och musik startar direkt i klicket (samma gest)',
+    iosStart.tracks === 'music,voice' && iosStart.playing && iosStart.playDuringClick && iosStart.playsDuringClick === 2,
+    JSON.stringify(iosStart),
+  )
+  await iosPage.click('[data-mika-indicator] [data-mika-mute]')
+  await sleep(100)
+  const iosMuted = await iosPage.evaluate(() =>
+    [...document.querySelectorAll('[data-mika-audio]')].map((a) => ({ id: a.dataset.mikaAudio, muted: a.muted, volume: a.volume })),
+  )
+  check(
+    'iOS-simulering: mute tystar båda spåren fast volymen inte går att ändra (muted = true)',
+    iosMuted.length === 2 && iosMuted.every((t) => t.muted === true && t.volume === 1),
     JSON.stringify(iosMuted),
   )
   await iosPage.close()
