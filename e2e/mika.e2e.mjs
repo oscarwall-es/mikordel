@@ -105,6 +105,7 @@ try {
             src: audio.currentSrc,
             paused: audio.paused,
             loop: audio.loop,
+            muted: audio.muted,
             volume: audio.volume,
             duration: Math.round(audio.duration * 100) / 100,
             currentTime: audio.currentTime,
@@ -138,7 +139,7 @@ try {
   )
   check(
     'Mikas röst: ljudelementet finns och spelar (loop, 70 % volym)',
-    !!voice && !voice.paused && voice.loop && voice.volume === 0.7 && voice.currentTime > 0 && voice.error === null,
+    !!voice && !voice.paused && voice.loop && !voice.muted && voice.volume === 0.7 && voice.currentTime > 0 && voice.error === null,
     JSON.stringify(voice),
   )
   check('Mikas röst: filen har laddats (cirka 5,6 s lång)', !!voice && voice.duration > 5 && voice.duration < 6.5, voice && `${voice.duration} s från ${voice.src}`)
@@ -147,12 +148,20 @@ try {
   await sleep(100)
   const muted = await page.evaluate(() => {
     const a = document.querySelector('[data-mika-audio]')
-    return { volume: a?.volume, pressed: document.querySelector('[data-mika-mute]')?.getAttribute('aria-pressed') }
+    return {
+      muted: a?.muted,
+      volume: a?.volume,
+      pressed: document.querySelector('[data-mika-mute]')?.getAttribute('aria-pressed'),
+    }
   })
-  check('Mute-knappen sätter volymen till 0', muted.volume === 0 && muted.pressed === 'true', JSON.stringify(muted))
+  check('Mute-knappen mutar (muted = true, volym 0)', muted.muted === true && muted.volume === 0 && muted.pressed === 'true', JSON.stringify(muted))
   await page.click('[data-mika-indicator] [data-mika-mute]')
   await sleep(100)
-  check('Mute-knappen igen: volymen tillbaka på 70 %', (await page.evaluate(() => document.querySelector('[data-mika-audio]')?.volume)) === 0.7)
+  const unmuted = await page.evaluate(() => {
+    const a = document.querySelector('[data-mika-audio]')
+    return { muted: a?.muted, volume: a?.volume }
+  })
+  check('Mute-knappen igen: ljud på (muted = false, volym 70 %)', unmuted.muted === false && unmuted.volume === 0.7, JSON.stringify(unmuted))
   await page.click('[role=tab]:nth-child(2)')
   await sleep(300)
   const afterTab = await page.evaluate(() => {
@@ -275,6 +284,45 @@ try {
   await toggle()
   s = await state()
   check('320 px: knappen slår på läget', s.pressed === 'true' && s.indicator)
+
+  // iOS Safari-simulering: volume går inte att ändra från JavaScript (alltid 1). Mute måste
+  // ändå fungera (via muted), och uppspelningen ska ha startat direkt i klicket.
+  const iosPage = await context.newPage()
+  await iosPage.setViewport({ width: 390, height: 780, deviceScaleFactor: 2 })
+  iosPage.on('pageerror', (e) => errors.push(e.message))
+  await iosPage.evaluateOnNewDocument(() => {
+    Object.defineProperty(HTMLMediaElement.prototype, 'volume', { get: () => 1, set: () => {}, configurable: true })
+    // Notera om play() anropas medan klickhändelsen fortfarande pågår (samma gest)
+    const originalPlay = HTMLMediaElement.prototype.play
+    HTMLMediaElement.prototype.play = function () {
+      window.__playDuringClick = window.event?.type === 'click'
+      return originalPlay.call(this)
+    }
+  })
+  await iosPage.goto(url, { waitUntil: 'networkidle0' })
+  await (
+    await iosPage.evaluateHandle(() =>
+      [...document.querySelectorAll('button[aria-label="Mika-mode"]')].find((b) => b.getClientRects().length > 0),
+    )
+  ).click()
+  await sleep(600)
+  const iosStart = await iosPage.evaluate(() => {
+    const a = document.querySelector('[data-mika-audio]')
+    return { playing: !!a && !a.paused, playDuringClick: window.__playDuringClick === true }
+  })
+  check('iOS-simulering: rösten startar direkt i klicket (samma gest)', iosStart.playing && iosStart.playDuringClick, JSON.stringify(iosStart))
+  await iosPage.click('[data-mika-indicator] [data-mika-mute]')
+  await sleep(100)
+  const iosMuted = await iosPage.evaluate(() => {
+    const a = document.querySelector('[data-mika-audio]')
+    return { muted: a?.muted, volume: a?.volume, playing: !!a && !a.paused }
+  })
+  check(
+    'iOS-simulering: mute fungerar fast volymen inte går att ändra (muted = true)',
+    iosMuted.muted === true && iosMuted.volume === 1,
+    JSON.stringify(iosMuted),
+  )
+  await iosPage.close()
 
   // prefers-reduced-motion: inget blink, glest och stilla regn
   const reducedPage = await context.newPage()

@@ -1,34 +1,23 @@
-import { useEffect, useRef } from 'react'
-import { MIKA_AUDIO_SRC, mikaVolume } from './audio'
+import { useEffect } from 'react'
+import { isMikaAudioPlaying, setMikaAudioMuted, startMikaAudio } from './audioPlayer'
 import { useMikaMode } from './useMikaMode'
 
 /**
- * Spelar Mikas röst i loop så länge komponenten är monterad (dvs. så länge Mika-mode är på).
- * Avmontering stoppar ljudet omedelbart. Kopplat bara till Mika-mode – inte till flikarna.
+ * Håller Mikas röst i takt med Mika-mode medan läget är på (monteras av MikaEffects).
+ *
+ * Start och stopp sker i klickhanteraren (MikaModeProvider), eftersom iOS Safari kräver att
+ * uppspelning startar inom användarens gest. Den här komponenten är skyddsnätet: den speglar
+ * mute-läget och startar ljudet om det av någon anledning inte redan spelar. Den stoppar
+ * medvetet inte ljudet vid avmontering – React StrictMode avmonterar på låtsas i utveckling,
+ * och en omstart då skulle ske utanför gesten.
  */
 export function MikaAudio() {
-  const ref = useRef<HTMLAudioElement>(null)
   const { audioMuted } = useMikaMode()
 
-  // Start och stopp
   useEffect(() => {
-    const audio = ref.current
-    if (!audio) return
-    audio.volume = mikaVolume(false)
-    // Slås på via ett knapptryck, så autoplay-spärren borde inte slå till – men om den ändå
-    // gör det (eller filen inte kan laddas) loggas det och appen fortsätter som vanligt.
-    const playing = audio.play()
-    playing?.catch?.((error: unknown) => console.warn('Mika-mode: kunde inte spela upp ljudet', error))
-    return () => {
-      audio.pause()
-      audio.currentTime = 0
-    }
-  }, [])
-
-  // Mute
-  useEffect(() => {
-    if (ref.current) ref.current.volume = mikaVolume(audioMuted)
+    if (isMikaAudioPlaying()) setMikaAudioMuted(audioMuted)
+    else startMikaAudio(audioMuted)
   }, [audioMuted])
 
-  return <audio ref={ref} src={MIKA_AUDIO_SRC} loop preload="auto" data-mika-audio="" />
+  return null
 }

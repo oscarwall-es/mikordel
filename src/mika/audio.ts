@@ -6,7 +6,3 @@ export const MIKA_AUDIO_SRC = `${import.meta.env.BASE_URL}audio/mika-voice.mp3`
 
 /** Startvolym – tydligt hörbar men inte fullt max. */
 export const MIKA_DEFAULT_VOLUME = 0.7
-
-export function mikaVolume(muted: boolean): number {
-  return muted ? 0 : MIKA_DEFAULT_VOLUME
-}
