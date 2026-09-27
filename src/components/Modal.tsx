@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { MikaIndicator } from '../mika/MikaIndicator'
 
 interface ModalProps {
   open: boolean
@@ -59,6 +60,8 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         </h2>
         {children}
       </div>
+      {/* Dialogen ligger i top layer över appens indikator – därför en egen här (inget när läget är av) */}
+      <MikaIndicator />
     </dialog>
   )
 }

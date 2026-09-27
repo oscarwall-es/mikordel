@@ -1,3 +1,5 @@
+import { MikaToggleButton } from '../mika/MikaToggleButton'
+
 interface HeaderProps {
   onHelp: () => void
   onStats: () => void
@@ -12,7 +14,7 @@ export function Header({ onHelp, onStats, onColors }: HeaderProps) {
   return (
     // Lika breda sidokolumner så titeln står centrerad fast högersidan har två knappar
     <header className="grid grid-cols-[1fr_auto_1fr] items-center px-2">
-      <div className="flex justify-start">
+      <div className="flex justify-start gap-1">
         <button type="button" className={iconButton} onClick={onHelp} aria-label="Så spelar du">
           {/* Frågetecken i fylld cirkel */}
           <svg viewBox="0 0 24 24" className="size-6" fill="currentColor" aria-hidden="true">
@@ -23,11 +25,18 @@ export function Header({ onHelp, onStats, onColors }: HeaderProps) {
             />
           </svg>
         </button>
+        {/* Under 375 px får titeln inte plats med tre knappar till höger – då står Mika-knappen här */}
+        <span className="hidden max-[375px]:contents">
+          <MikaToggleButton className={iconButton} />
+        </span>
       </div>
 
       <h1 className="text-center font-mono text-[25px] font-medium tracking-wide text-on-page">Mikordel</h1>
 
       <div className="flex justify-end gap-1">
+        <span className="contents max-[375px]:hidden">
+          <MikaToggleButton className={iconButton} />
+        </span>
         <button type="button" className={iconButton} onClick={onColors} aria-label="Bakgrundsfärg">
           {/* Målarpalett */}
           <svg viewBox="0 0 24 24" className="size-6" fill="currentColor" aria-hidden="true">

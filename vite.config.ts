@@ -13,6 +13,6 @@ export default defineConfig(({ command, isPreview }) => ({
   base: command === 'build' || isPreview ? '/mikordel/' : '/',
   plugins: [react(), tailwindcss()],
   test: {
-    include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.mjs'],
   },
 }))

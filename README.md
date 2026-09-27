@@ -16,6 +16,13 @@ npm run test:e2e # flödestest i headless Chrome (kräver installerad Chrome, ev
 npm run build    # typkontroll + produktionsbygge i dist/
 ```
 
+## Mika-mode
+
+Gnistknappen i toppmenyn slår på **Mika-mode**, en global brytare för knasiga extrafunktioner.
+Läget är alltid av vid start och sparas aldrig. När det är av ser och beter sig spelet exakt som
+vanligt. All kod för läget ligger i [`src/mika/`](src/mika/README.md), som också beskriver
+mönstret för att lägga till nya funktioner.
+
 ## Ordlistor
 
 | Fil | Innehåll | Används till |
