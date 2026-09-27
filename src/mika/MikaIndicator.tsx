@@ -1,10 +1,10 @@
-import { MikaMuteButton } from './MikaMuteButton'
+import { MikaInterruptButton } from './MikaInterruptButton'
 import { useMikaMode } from './useMikaMode'
 
 /**
  * Omisskännlig markering när Mika-mode är på: en tunn magenta ram runt hela fönstret och en
- * liten etikett nere till vänster (tomt utrymme bredvid SPELA-knappen), med ljudknappen
- * bredvid. Ramen och etiketten släpper igenom klick; bara ljudknappen är klickbar.
+ * liten etikett nere till vänster (tomt utrymme bredvid SPELA-knappen), med avbrottsknappen
+ * bredvid. Ramen och etiketten släpper igenom klick; bara avbrottsknappen är klickbar.
  *
  * Renderar ingenting alls när läget är av. Monteras både i appen och inuti varje modal, så
  * att den syns även ovanpå dialoger (som ligger i webbläsarens top layer).
@@ -22,7 +22,7 @@ export function MikaIndicator() {
         >
           ✦ Mika-mode
         </div>
-        <MikaMuteButton />
+        <MikaInterruptButton />
       </div>
     </div>
   )

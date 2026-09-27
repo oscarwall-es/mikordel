@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { setMikaAudioMuted, startMikaAudio, stopMikaAudio } from './audioPlayer'
+import { startMikaAudio, startMikaInterrupt, stopMikaAudio } from './audioPlayer'
 import { MIKA_MODE_DEFAULT, MikaModeContext } from './mikaMode'
 
 /**
@@ -8,31 +8,32 @@ import { MIKA_MODE_DEFAULT, MikaModeContext } from './mikaMode'
  */
 export function MikaModeProvider({ children }: { children: ReactNode }) {
   const [mikaMode, setMikaMode] = useState(MIKA_MODE_DEFAULT)
-  const [audioMuted, setAudioMuted] = useState(false)
+  const [interrupting, setInterrupting] = useState(false)
 
   const toggleMikaMode = useCallback(() => {
     const next = !mikaMode
     // Ljudet startas/stoppas här, synkront i klickhanteraren – iOS Safari kräver att
     // uppspelning startar inom användarens gest, inte i en effekt efter omrendering.
-    if (next) startMikaAudio(false)
+    // stopMikaAudio() stoppar även ett pågående avbrott.
+    if (next) startMikaAudio()
     else stopMikaAudio()
     setMikaMode(next)
-    // Varje gång läget slås på börjar det med ljud på
-    setAudioMuted(false)
+    setInterrupting(false)
   }, [mikaMode])
 
-  const toggleAudioMuted = useCallback(() => {
-    const next = !audioMuted
-    setMikaAudioMuted(next) // direkt i gesten, via `muted` (fungerar på iOS)
-    setAudioMuted(next)
-  }, [audioMuted])
+  const startInterrupt = useCallback(() => {
+    // Bara när läget är på, och aldrig ovanpå ett pågående avbrott
+    if (!mikaMode || interrupting) return
+    // Startas direkt i gesten (iOS); när avbrottsspåret tagit slut återgår knappen
+    if (startMikaInterrupt(() => setInterrupting(false))) setInterrupting(true)
+  }, [mikaMode, interrupting])
 
   // Om providern avmonteras (t.ex. i tester) ska inget ljud leva kvar
   useEffect(() => stopMikaAudio, [])
 
   const value = useMemo(
-    () => ({ mikaMode, toggleMikaMode, audioMuted, toggleAudioMuted }),
-    [mikaMode, toggleMikaMode, audioMuted, toggleAudioMuted],
+    () => ({ mikaMode, toggleMikaMode, interrupting, startInterrupt }),
+    [mikaMode, toggleMikaMode, interrupting, startInterrupt],
   )
   return <MikaModeContext.Provider value={value}>{children}</MikaModeContext.Provider>
 }

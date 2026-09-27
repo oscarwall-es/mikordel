@@ -1,17 +1,22 @@
-import { MIKA_TRACKS, type MikaTrack } from './audio'
+import { MIKA_INTERRUPT_TRACK, MIKA_TRACKS, type MikaTrack } from './audio'
 
 /**
- * Spelaren för Mika-mode-ljudet: alla spår i MIKA_TRACKS (röst och musik) spelar samtidigt,
- * i loop, oberoende av varandra. Varje spår har ett eget <audio>-element som återanvänds
- * hela sessionen.
+ * Spelaren för Mika-mode-ljudet.
+ *  - Bakgrundsspåren (MIKA_TRACKS: röst och musik) spelar samtidigt, i loop, oberoende av
+ *    varandra, så länge Mika-mode är på.
+ *  - Avbrottsspåret (MIKA_INTERRUPT_TRACK) spelas en gång när man trycker på avbrottsknappen.
+ *    Under tiden spelar bakgrundsspåren vidare men mutade; när avbrottets 'ended'-händelse
+ *    kommer avmutas de igen. De behöver alltså aldrig startas om (vilket iOS kunde neka
+ *    utanför en gest) – de fortsätter där de hunnit.
+ * Varje spår har ett eget <audio>-element som återanvänds hela sessionen.
  *
  * iOS Safari-särdrag som styr upplägget:
  *  - `volume` går inte att ändra från JavaScript på iOS (den är alltid 1 och tilldelningar
- *    ignoreras). Mute görs därför med `muted`, som iOS respekterar. `volume` sätts ändå
- *    (spårets volym / 0) för plattformar där den fungerar.
+ *    ignoreras). Tystning görs därför med `muted`, som iOS respekterar. `volume` sätts ändå
+ *    där den fungerar.
  *  - Uppspelning måste startas direkt i användarens gest (klicket), inte senare i en effekt
- *    efter omrendering. startMikaAudio() anropas därför synkront från klickhanteraren och
- *    startar alla spår i samma anrop.
+ *    efter omrendering. startMikaAudio() och startMikaInterrupt() anropas därför synkront
+ *    från klickhanterarna.
  *  - Ett element som väl startats i en gest får spela igen senare, så elementen återanvänds
  *    i stället för att skapas på nytt.
  */
@@ -22,64 +27,134 @@ interface TrackState {
   active: boolean
 }
 
-let tracks: TrackState[] | null = null
+let background: TrackState[] | null = null
+let interrupt: TrackState | null = null
+/** Anropas när avbrottet är klart; nollställs vid stopp så att inget gammalt avbrott rapporteras. */
+let onInterruptEnd: (() => void) | null = null
+/** Räknas upp för varje avbrott, så att ett sent avslag från ett gammalt avbrott inte avslutar ett nytt. */
+let interruptRun = 0
 
-function getTracks(): TrackState[] {
-  if (!tracks) {
-    tracks = MIKA_TRACKS.map((track) => {
-      const element = document.createElement('audio')
-      element.src = track.src
-      element.loop = true
-      element.preload = 'auto'
-      element.setAttribute('playsinline', '')
-      element.setAttribute('data-mika-audio', track.id)
-      return { track, element, active: false }
-    })
-  }
-  return tracks
+function createTrack(track: MikaTrack, loop: boolean): TrackState {
+  const element = document.createElement('audio')
+  element.src = track.src
+  element.loop = loop
+  element.preload = 'auto'
+  element.setAttribute('playsinline', '')
+  element.setAttribute('data-mika-audio', track.id)
+  return { track, element, active: false }
 }
 
-/** Mutar/slår på alla spår samtidigt – via `muted` (fungerar på iOS), plus volume där det går. */
-export function setMikaAudioMuted(muted: boolean): void {
-  for (const { track, element } of tracks ?? []) {
+function getBackground(): TrackState[] {
+  background ??= MIKA_TRACKS.map((track) => createTrack(track, true))
+  return background
+}
+
+function getInterrupt(): TrackState {
+  if (!interrupt) {
+    interrupt = createTrack(MIKA_INTERRUPT_TRACK, false)
+    // Avbrottet är klart när spåret faktiskt tagit slut – ingen hårdkodad timer
+    interrupt.element.addEventListener('ended', () => {
+      if (interrupt?.active) finishInterrupt()
+    })
+  }
+  return interrupt
+}
+
+/** play() som aldrig kastar; `onRefused` anropas om webbläsaren nekar. */
+function safePlay(state: TrackState, onRefused: () => void = () => {}) {
+  const refused = (error: unknown) => {
+    state.active = false // så att nästa gest får försöka igen
+    console.warn(`Mika-mode: kunde inte spela upp ljudet (${state.track.id})`, error)
+    onRefused()
+  }
+  try {
+    // Nekad uppspelning (autoplay-spärr, fil saknas …) loggas – appen fortsätter som vanligt
+    state.element.play()?.catch?.(refused)
+  } catch (error) {
+    refused(error)
+  }
+}
+
+/** Tystar/avtystar bakgrundsspåren – via `muted` (fungerar på iOS), plus volume där det går. */
+function setBackgroundMuted(muted: boolean): void {
+  for (const { track, element } of background ?? []) {
     element.muted = muted
     element.volume = muted ? 0 : track.volume
   }
 }
 
-/** Startar alla spår i loop. Anropa direkt i en klickhanterare (iOS). Kastar aldrig. */
-export function startMikaAudio(muted = false): void {
+/** Startar bakgrundsspåren i loop. Anropa direkt i en klickhanterare (iOS). Kastar aldrig. */
+export function startMikaAudio(): void {
   if (typeof document === 'undefined') return
-  const all = getTracks()
+  const all = getBackground()
   for (const { element } of all) if (!element.isConnected) document.body.appendChild(element)
-  setMikaAudioMuted(muted)
+  // Pågår ett avbrott ska bakgrunden vara tyst tills det är klart
+  setBackgroundMuted(isMikaInterruptActive())
   for (const state of all) {
     if (state.active) continue
     state.active = true
-    const refused = (error: unknown) => {
-      state.active = false // så att nästa gest (t.ex. mute-knappen) får försöka igen
-      console.warn(`Mika-mode: kunde inte spela upp ljudet (${state.track.id})`, error)
-    }
-    try {
-      // Nekad uppspelning (autoplay-spärr, fil saknas …) loggas – appen fortsätter som vanligt
-      state.element.play()?.catch?.(refused)
-    } catch (error) {
-      refused(error)
-    }
+    safePlay(state)
   }
 }
 
-/** Stoppar alla spår omedelbart och tar bort elementen ur sidan (de återanvänds nästa gång). */
+/**
+ * Startar avbrottet: tystar röst och musik och spelar avbrottsspåret en gång. Anropa direkt i
+ * en klickhanterare (iOS). Gör ingenting om ett avbrott redan pågår. `onEnd` anropas när
+ * avbrottet är klart (spåret tog slut eller kunde inte spelas) – men inte om det stoppas.
+ * Returnerar om ett avbrott startades.
+ */
+export function startMikaInterrupt(onEnd?: () => void): boolean {
+  if (typeof document === 'undefined') return false
+  const state = getInterrupt()
+  if (state.active) return false
+  state.active = true
+  const run = ++interruptRun
+  onInterruptEnd = onEnd ?? null
+  setBackgroundMuted(true)
+  const { element, track } = state
+  element.currentTime = 0
+  element.muted = false
+  element.volume = track.volume
+  if (!element.isConnected) document.body.appendChild(element)
+  // Kan avbrottet inte spelas ska bakgrunden inte bli kvar tyst – avsluta direkt
+  safePlay(state, () => {
+    if (run === interruptRun && onInterruptEnd !== null) finishInterrupt()
+  })
+  return true
+}
+
+/** Avbrottet är klart: bakgrundsspåren hörs igen, där de hunnit. */
+function finishInterrupt(): void {
+  const state = interrupt
+  if (!state) return
+  state.active = false
+  state.element.remove()
+  setBackgroundMuted(false)
+  const done = onInterruptEnd
+  onInterruptEnd = null
+  done?.()
+}
+
+/** Om ett avbrott pågår just nu. */
+export function isMikaInterruptActive(): boolean {
+  return !!interrupt?.active
+}
+
+/** Stoppar allt Mika-ljud omedelbart – även ett pågående avbrott – och tar bort elementen ur sidan. */
 export function stopMikaAudio(): void {
-  for (const state of tracks ?? []) {
+  onInterruptEnd = null
+  interruptRun++
+  for (const state of [...(background ?? []), ...(interrupt ? [interrupt] : [])]) {
     state.active = false
     state.element.pause()
     state.element.currentTime = 0
     state.element.remove()
   }
+  // Nästa gång läget slås på ska ljudet höras direkt
+  setBackgroundMuted(false)
 }
 
-/** Om alla spår är startade (annars startar skyddsnätet i MikaAudio de som saknas). */
+/** Om bakgrundsspåren är startade (annars startar skyddsnätet i MikaAudio de som saknas). */
 export function isMikaAudioPlaying(): boolean {
-  return !!tracks && tracks.every((t) => t.active)
+  return !!background && background.every((t) => t.active)
 }

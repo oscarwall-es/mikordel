@@ -9,7 +9,10 @@ knasiga extrafunktioner. När läget är av ser och beter sig spelet exakt som v
 | `MikaModeProvider.tsx` | Håller flaggan i React-state – sparas aldrig, av vid varje omladdning |
 | `useMikaMode.ts` | Hooken `useMikaMode()` och **byggmönstret** för nya funktioner (läs kommentaren) |
 | `MikaToggleButton.tsx` | Knappen i toppmenyn |
-| `MikaIndicator.tsx` | Ram och etikett som visar att läget är på |
+| `MikaIndicator.tsx` | Ram och etikett som visar att läget är på, med avbrottsknappen |
+| `MikaInterruptButton.tsx` | Avbrottsknappen: tystar röst och musik och spelar Mikas avbrott en gång |
+| `audio.ts`, `audioPlayer.ts` | Ljudspåren (röst, musik, avbrott) och spelaren (iOS-säker: start i klicket, tystnad via `muted`) |
+| `MikaEffects.tsx`, `MikaDisco.tsx`, `MikaRain.tsx`, `disco.ts`, `rain.ts` | Diskoläget |
 | `mikaMode.test.tsx` | Tester för flaggan, knappen, indikatorn och att spellogiken är opåverkad |
 
 ## Lägga till en ny knasig funktion

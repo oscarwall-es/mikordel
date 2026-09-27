@@ -3,8 +3,9 @@
  * Flödestest för Mika-mode: knappen i toppmenyn, indikatorn, att läget är av vid start och
  * efter omladdning, att inget sparas, att spelet går att spela med läget på, diskoläget
  * (blinkande bakgrund under 3 byten/s, regn, direkt borta vid av, dämpat vid reducerad rörelse)
- * samt Mikas röst och bakgrundsmusik (båda i loop samtidigt och hörs, mute tystar båda via
- * muted – även när volume inte går att ändra som på iOS – och båda stoppas direkt vid av).
+ * samt Mikas röst och bakgrundsmusik (båda i loop samtidigt och hörs, båda stoppas direkt vid
+ * av) och avbrottsknappen (tystar röst och musik via muted – även när volume inte går att
+ * ändra som på iOS – spelar avbrottet en gång och återställer ljudet när det tagit slut).
  *
  * Kör:  npm run test:e2e              (startar egen dev-server)
  *       E2E_URL=https://oscarwall-es.github.io/mikordel/ node e2e/mika.e2e.mjs   (publicerad sida)
@@ -164,22 +165,92 @@ try {
         ]),
       ),
     )
-  await page.click('[data-mika-indicator] [data-mika-mute]')
-  await sleep(100)
-  const muted = await audioState()
-  check(
-    'Mute-knappen mutar båda spåren (muted = true, volym 0)',
-    muted.voice?.muted === true && muted.music?.muted === true && muted.voice.volume === 0 && muted.music.volume === 0,
-    JSON.stringify(muted),
+  // Avbrottsknappen: tystar röst och musik, spelar Mikas avbrott en gång, sedan tillbaka av sig själv
+  const clickedAt = Date.now()
+  await page.click('[data-mika-indicator] [data-mika-interrupt]')
+  await sleep(150)
+  const during = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const el = (id) => document.querySelector(`[data-mika-audio="${id}"]`)
+        const button = document.querySelector('[data-mika-interrupt]')
+        const state = {
+          voice: { muted: el('voice')?.muted, playing: el('voice') ? !el('voice').paused : false },
+          music: { muted: el('music')?.muted, playing: el('music') ? !el('music').paused : false },
+          interrupt: el('interrupt') ? { playing: !el('interrupt').paused, loop: el('interrupt').loop, src: el('interrupt').currentSrc.split('/').pop() } : null,
+          button: { disabled: button?.disabled, label: button?.getAttribute('aria-label') },
+        }
+        // Signalnivå från avbrottsspåret
+        ;(async () => {
+          try {
+            const ctx = new AudioContext()
+            await ctx.resume()
+            const source = ctx.createMediaElementSource(el('interrupt'))
+            const analyser = ctx.createAnalyser()
+            analyser.fftSize = 2048
+            source.connect(analyser)
+            analyser.connect(ctx.destination)
+            const data = new Float32Array(2048)
+            let peak = 0
+            const until = performance.now() + 1200
+            while (performance.now() < until) {
+              await new Promise((r) => setTimeout(r, 50))
+              analyser.getFloatTimeDomainData(data)
+              for (const v of data) peak = Math.max(peak, Math.abs(v))
+            }
+            state.interruptPeak = Math.round(peak * 1000) / 1000
+          } catch (e) {
+            state.analyserError = String(e)
+          }
+          resolve(state)
+        })()
+      }),
   )
-  await page.click('[data-mika-indicator] [data-mika-mute]')
-  await sleep(100)
-  const unmuted = await audioState()
   check(
-    'Mute-knappen igen: båda spåren på (röst 70 %, musik 55 %)',
-    unmuted.voice?.muted === false && unmuted.music?.muted === false && unmuted.voice.volume === 0.7 && unmuted.music.volume === 0.55,
-    JSON.stringify(unmuted),
+    'Avbrottsknappen: röst och musik tystas (muted) men spelar vidare',
+    during.voice.muted === true && during.music.muted === true && during.voice.playing && during.music.playing,
+    JSON.stringify({ voice: during.voice, music: during.music }),
   )
+  check(
+    'Avbrottsknappen: avbrottsspåret spelar en gång (ingen loop) och hörs',
+    !!during.interrupt && during.interrupt.playing && during.interrupt.loop === false && during.interruptPeak > 0.01,
+    JSON.stringify({ ...during.interrupt, topp: during.interruptPeak }),
+  )
+  check('Under avbrottet: knappen är inaktiverad och visar att avbrottet pågår', during.button.disabled === true && during.button.label === 'Mikas avbrott pågår', JSON.stringify(during.button))
+  const before = await page.evaluate(() => document.querySelector('[data-mika-audio="interrupt"]').currentTime)
+  await page.evaluate(() => document.querySelector('[data-mika-interrupt]').click())
+  await sleep(300)
+  const after = await page.evaluate(() => document.querySelector('[data-mika-audio="interrupt"]')?.currentTime)
+  check('Under avbrottet: ett nytt klick gör ingenting (ingen omstart)', after > before, `${before.toFixed(2)} s → ${after?.toFixed(2)} s`)
+  // Vänta ut avbrottsspåret på riktigt (~10,2 s) – slutet styrs av dess 'ended'-händelse
+  const endedAfter = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const started = performance.now()
+        const poll = setInterval(() => {
+          if (!document.querySelector('[data-mika-audio="interrupt"]')) {
+            clearInterval(poll)
+            resolve(Math.round(performance.now() - started))
+          } else if (performance.now() - started > 15000) {
+            clearInterval(poll)
+            resolve(null)
+          }
+        }, 50)
+      }),
+  )
+  const totalMs = Date.now() - clickedAt
+  const back = await audioState()
+  const button = await page.evaluate(() => ({
+    disabled: document.querySelector('[data-mika-interrupt]')?.disabled,
+    label: document.querySelector('[data-mika-interrupt]')?.getAttribute('aria-label'),
+  }))
+  check('Avbrottet tar slut när spåret är slut (~10,2 s)', endedAfter !== null && totalMs > 9500 && totalMs < 12500, `${(totalMs / 1000).toFixed(1)} s efter klicket`)
+  check(
+    'Efter avbrottet: röst och musik hörs igen automatiskt (70 % / 55 %)',
+    back.voice?.muted === false && back.music?.muted === false && back.voice.volume === 0.7 && back.music.volume === 0.55 && back.voice.playing && back.music.playing,
+    JSON.stringify(back),
+  )
+  check('Efter avbrottet: knappen går att använda igen', button.disabled === false && button.label === 'Avbryt med Mika', JSON.stringify(button))
   await page.click('[role=tab]:nth-child(2)')
   await sleep(300)
   const afterTab = await audioState()
@@ -247,6 +318,9 @@ try {
   await sleep(100)
 
   const userBg = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)
+  // Starta ett nytt avbrott och slå sedan av Mika-mode mitt i det
+  await page.click('[data-mika-indicator] [data-mika-interrupt]')
+  await sleep(300)
   // Behåll referenser till ljudelementen, för att se att de verkligen stoppas (inte bara tas bort)
   await page.evaluate(() => {
     window.__mikaAudio = [...document.querySelectorAll('[data-mika-audio]')]
@@ -257,8 +331,10 @@ try {
     tracks: window.__mikaAudio.map((a) => ({ id: a.dataset.mikaAudio, paused: a.paused, currentTime: a.currentTime })),
   }))
   check(
-    'Av: både röst och musik stoppas omedelbart',
-    stopped.inDom === 0 && stopped.tracks.length === 2 && stopped.tracks.every((t) => t.paused && t.currentTime === 0),
+    'Av mitt under ett avbrott: röst, musik och avbrott stoppas omedelbart',
+    stopped.inDom === 0 &&
+      stopped.tracks.map((t) => t.id).sort().join(',') === 'interrupt,music,voice' &&
+      stopped.tracks.every((t) => t.paused && t.currentTime === 0),
     JSON.stringify(stopped),
   )
   s = await state()
@@ -343,15 +419,42 @@ try {
     iosStart.tracks === 'music,voice' && iosStart.playing && iosStart.playDuringClick && iosStart.playsDuringClick === 2,
     JSON.stringify(iosStart),
   )
-  await iosPage.click('[data-mika-indicator] [data-mika-mute]')
-  await sleep(100)
-  const iosMuted = await iosPage.evaluate(() =>
-    [...document.querySelectorAll('[data-mika-audio]')].map((a) => ({ id: a.dataset.mikaAudio, muted: a.muted, volume: a.volume })),
+  await iosPage.click('[data-mika-indicator] [data-mika-interrupt]')
+  await sleep(300)
+  const iosDuring = await iosPage.evaluate(() => ({
+    tracks: [...document.querySelectorAll('[data-mika-audio]')].map((a) => ({
+      id: a.dataset.mikaAudio,
+      muted: a.muted,
+      volume: a.volume,
+      playing: !a.paused,
+    })),
+    playsDuringClick: window.__playsDuringClick ?? 0,
+  }))
+  const iosBg = iosDuring.tracks.filter((t) => t.id !== 'interrupt')
+  const iosInt = iosDuring.tracks.find((t) => t.id === 'interrupt')
+  check(
+    'iOS-simulering: avbrottet tystar röst och musik via muted fast volymen inte går att ändra',
+    iosBg.length === 2 && iosBg.every((t) => t.muted === true && t.volume === 1 && t.playing),
+    JSON.stringify(iosBg),
   )
   check(
-    'iOS-simulering: mute tystar båda spåren fast volymen inte går att ändra (muted = true)',
-    iosMuted.length === 2 && iosMuted.every((t) => t.muted === true && t.volume === 1),
-    JSON.stringify(iosMuted),
+    'iOS-simulering: avbrottsspåret startar direkt i klicket och spelar',
+    !!iosInt && iosInt.playing && !iosInt.muted && iosDuring.playsDuringClick === 3,
+    JSON.stringify({ ...iosInt, playAnropIKlick: iosDuring.playsDuringClick }),
+  )
+  // Spola fram till strax före slutet, så att en riktig 'ended'-händelse kommer snabbt
+  await iosPage.evaluate(() => {
+    const a = document.querySelector('[data-mika-audio="interrupt"]')
+    a.currentTime = Math.max(0, a.duration - 0.4)
+  })
+  await iosPage.waitForFunction(() => !document.querySelector('[data-mika-audio="interrupt"]'), { timeout: 5000 }).catch(() => {})
+  const iosAfter = await iosPage.evaluate(() =>
+    [...document.querySelectorAll('[data-mika-audio]')].map((a) => ({ id: a.dataset.mikaAudio, muted: a.muted, playing: !a.paused })),
+  )
+  check(
+    'iOS-simulering: efter avbrottet (ended) hörs röst och musik igen',
+    iosAfter.length === 2 && iosAfter.every((t) => t.muted === false && t.playing),
+    JSON.stringify(iosAfter),
   )
   await iosPage.close()
 

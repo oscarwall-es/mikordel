@@ -6,9 +6,10 @@ export const MIKA_MODE_DEFAULT = false
 export interface MikaModeValue {
   mikaMode: boolean
   toggleMikaMode: () => void
-  /** Ljudet i Mika-mode. Nollställs till "ljud på" varje gång läget slås på eller av; sparas aldrig. */
-  audioMuted: boolean
-  toggleAudioMuted: () => void
+  /** Om avbrottet (idé #4) pågår: röst och musik är tysta medan avbrottsspåret spelar. */
+  interrupting: boolean
+  /** Startar avbrottet. Gör ingenting om läget är av eller ett avbrott redan pågår. */
+  startInterrupt: () => void
 }
 
 /**
@@ -18,6 +19,6 @@ export interface MikaModeValue {
 export const MikaModeContext = createContext<MikaModeValue>({
   mikaMode: MIKA_MODE_DEFAULT,
   toggleMikaMode: () => {},
-  audioMuted: false,
-  toggleAudioMuted: () => {},
+  interrupting: false,
+  startInterrupt: () => {},
 })
